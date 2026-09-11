@@ -28,7 +28,7 @@ while (true) {
     $upd->execute([$row['short']]);
     if ($upd->rowCount() === 0) continue;
 
-    $cmd = 'PATH=/usr/bin:/bin:/usr/sbin:/sbin nohup '
+    $cmd = 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin nohup '
         . escapeshellarg(WORKER) . ' '
         . escapeshellarg((string)$row['short']) . ' ' . escapeshellarg((string)$row['url'])
         . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';

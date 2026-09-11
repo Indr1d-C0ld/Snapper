@@ -86,7 +86,7 @@ function enqueue_capture(string $url, ?string $title, ?string $parentShort = nul
     }
     $pdo->prepare("UPDATE snapshots SET status='running' WHERE short=? AND status='pending'")
         ->execute([$short]);
-    $cmd = 'PATH=/usr/bin:/bin:/usr/sbin:/sbin nohup '
+    $cmd = 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin nohup '
         . escapeshellarg(WORKER) . ' ' . escapeshellarg($short) . ' ' . escapeshellarg($url)
         . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';
     shell_exec($cmd);

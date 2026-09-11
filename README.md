@@ -70,6 +70,7 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `app/assets/snapper.css` | tema «Camera Oscura / Provino» (nessun asset esterno) |
 | `deploy/apache-archives.conf.sample` | sandbox degli archivi + stop all'esecuzione di codice |
 | `deploy/auth.php.sample` | modello per `/etc/snapper/auth.php` |
+| `deploy/install-ots.sh` | installa il comando `ots` in un venv di sistema (vedi sotto) |
 
 ## Schema dati (SQLite)
 
@@ -132,6 +133,21 @@ in-app se cambi prefisso).
 | `tesseract` | OCR di fallback per pagine senza testo | nessun testo per quelle pagine |
 | ImageMagick (`compare`,`convert`,`identify`) | diff visivo tra versioni | nessun `diff.png` / `diff_pct` |
 | `ots` (opentimestamps-client) | marca temporale sui `SHA256SUMS` | solo hash, niente timestamp |
+
+`ots` **non è su apt** (`python3-opentimestamps` è solo la libreria, non fornisce
+il comando) e **non va installato con `pip`/`pipx --user` da root**: finirebbe in
+una home non raggiungibile da `www-data`, che è chi lo invoca dal worker.
+
+```bash
+sudo bash deploy/install-ots.sh
+```
+
+Crea un venv dedicato in `/opt/opentimestamps`, un symlink in `/usr/local/bin/ots`
+(già nel `PATH` con cui `save.php`/`resnap.php`/`drain.php` avviano il worker), e
+chiude con una marca temporale di prova reale eseguita come `www-data`. Una volta
+installato il worker lo rileva da solo. Le marche restano "in sospeso" finché non
+confermate su Bitcoin (di norma qualche ora); per completarle:
+`sudo -u www-data ots upgrade <short>/SHA256SUMS.ots`.
 
 ## Licenza
 

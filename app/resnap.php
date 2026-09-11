@@ -41,7 +41,7 @@ $pdo->prepare('INSERT INTO snapshots(short, url, title, status, parent_short)
 $running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running'")->fetch()['c'];
 if ($running < MAX_CONCURRENCY) {
     $pdo->prepare("UPDATE snapshots SET status='running' WHERE short=?")->execute([$new]);
-    $cmd = 'PATH=/usr/bin:/bin:/usr/sbin:/sbin nohup '
+    $cmd = 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin nohup '
         . escapeshellarg(WORKER) . ' ' . escapeshellarg($new) . ' ' . escapeshellarg((string)$row['url'])
         . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';
     shell_exec($cmd);

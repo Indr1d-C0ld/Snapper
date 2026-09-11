@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-09-11 (2) — Interfaccia responsive + OpenTimestamps attivabile
+
+- **Mobile/tablet**: nuove regole tutte dentro `@media (max-width:640px)` (o
+  innocue a qualsiasi larghezza) — `.tbl-scroll` per far scorrere solo le
+  tabelle larghe (Registro, Watch) senza scroll orizzontale di pagina,
+  `.col-sec` per nascondere le colonne meno essenziali sotto i 640px, testata
+  impilata con nav a piena larghezza, bottoni primari a piena larghezza, input
+  a 16px (niente zoom automatico di iOS Safari). Verificato che sopra i 640px
+  non cambi nulla. File: `app/assets/snapper.css`, `app/index.php`,
+  `app/watches.php`.
+- **`deploy/install-ots.sh`** (nuovo): installa il comando `ots` in un venv
+  dedicato (`/opt/opentimestamps` + symlink `/usr/local/bin/ots`), leggibile
+  da qualunque utente, con self-test reale (marca temporale eseguita come
+  `www-data`, lo stesso utente/contesto del worker). `ots` non è su apt
+  (`python3-opentimestamps` è solo la libreria) e non va installato con
+  `pip`/`pipx --user` da root, altrimenti finirebbe in una home non
+  raggiungibile da `www-data`.
+- **Fix**: il `PATH` ristretto con cui `save.php`/`resnap.php`/`drain.php`
+  avviano il worker (`app/lib.php` → `enqueue_capture()`) non includeva
+  `/usr/local/bin` — dove finisce il symlink di `ots` (e in generale dove
+  vive software non pacchettizzato via apt). Senza questo fix `ots` non
+  sarebbe mai stato trovato dal worker anche installandolo correttamente.
+  Ora: `/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin`.
+
 ## 2026-09-11 — Prima pubblicazione: tema «Camera Oscura» + hardening
 
 Rework completo del servizio, portato in produzione e pubblicato in versione
