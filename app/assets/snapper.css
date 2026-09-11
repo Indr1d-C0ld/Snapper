@@ -246,6 +246,39 @@ mark{background:var(--amber);color:#1c1a15;padding:0 .1em}
 .mount .err{color:var(--fog);font:12px/1.4 var(--mono)}
 .mount .note{color:var(--muted);font:11px/1.4 var(--mono);text-align:center;margin-top:.4rem}
 
+/* ---- Tabelle larghe: scorrimento orizzontale (mobile) ----------- */
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+/* ---- Mobile / tablet: smartphone e tablet in verticale --------- */
+@media (max-width:640px){
+  html{overflow-x:hidden}
+
+  /* niente scroll orizzontale della pagina: solo le tabelle scorrono */
+  .tbl-scroll .ledger{min-width:720px}
+  .col-sec{display:none}
+
+  /* testata: titolo sopra, nav a piena larghezza sotto */
+  .masthead{flex-direction:column;align-items:flex-start;gap:.7rem}
+  .masthead h1{letter-spacing:.14em}
+  .mast-nav{width:100%}
+  .mast-nav .tab{flex:1 1 0;text-align:center}
+
+  /* bottoni e tab: bersaglio di tocco più comodo */
+  button,.btn,.tab{padding:.65rem 1rem}
+  .frame .ops a,.frame .ops button{padding:.5em .65em}
+  .viewtoggle a{padding:.6rem .9rem}
+
+  /* pulsanti primari dei pannelli: a piena larghezza */
+  .panels .panel form > button[type=submit]{width:100%}
+
+  /* input a 16px: evita lo zoom automatico di iOS Safari al focus */
+  input[type=url],input[type=text],input[type=search],input[type=password]{font-size:16px}
+
+  /* cerchio di selezione: bersaglio di tocco leggermente più grande */
+  .pin{width:36px;height:36px}
+  .pin svg{width:36px;height:36px}
+}
+
 /* ---- Stampa: contact sheet su carta bianca ---------------- */
 @media print{
   body{background:#fff;color:#111;padding:0}

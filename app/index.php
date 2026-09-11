@@ -186,10 +186,12 @@ layout_masthead('sheet');
   </section>
 
 <?php else: /* ---- REGISTRO ---- */ ?>
+  <div class="tbl-scroll">
   <table class="ledger" id="grid">
     <thead><tr>
       <th>#</th><th>Anteprima</th><th>Quando</th><th>Dominio / URL</th>
-      <th>Titolo</th><th>Peso</th><th>HTTP</th><th>Stato</th><th>File</th><th>Azioni</th>
+      <th>Titolo</th><th class="col-sec">Peso</th><th class="col-sec">HTTP</th>
+      <th>Stato</th><th>File</th><th>Azioni</th>
     </tr></thead>
     <tbody>
     <?php $n = $startNo; foreach ($rows as $r):
@@ -210,8 +212,8 @@ layout_masthead('sheet');
           <a class="u" href="<?= h($r['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($r['url']) ?></a>
         </td>
         <td><?= h($r['title'] ?? '') ?></td>
-        <td class="nowrap"><?= h(human_size((int)($r['size_bytes'] ?? 0))) ?></td>
-        <td class="nowrap"><?= h((string)($r['http_status'] ?? '')) ?></td>
+        <td class="nowrap col-sec"><?= h(human_size((int)($r['size_bytes'] ?? 0))) ?></td>
+        <td class="nowrap col-sec"><?= h((string)($r['http_status'] ?? '')) ?></td>
         <td class="nowrap"><?= status_stamp($st) ?>
           <?php if (!empty($r['status_msg'])): ?><br><span class="u" style="color:var(--fog)"><?= h($r['status_msg']) ?></span><?php endif; ?>
         </td>
@@ -240,6 +242,7 @@ layout_masthead('sheet');
     <?php $n--; endforeach; ?>
     </tbody>
   </table>
+  </div>
 <?php endif; ?>
 
 <?php if ($pages > 1): ?>

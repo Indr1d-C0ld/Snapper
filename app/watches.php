@@ -160,10 +160,11 @@ layout_masthead('watch');
   <div class="empty">Nessun watch. Aggiungine uno qui sopra, oppure spunta
     «Osserva e ri-cattura» quando archivi un URL dal Provino.</div>
 <?php else: ?>
+<div class="tbl-scroll">
 <table class="ledger" id="grid">
   <thead><tr>
     <th>#</th><th>Stato</th><th>URL / etichetta</th><th>Ogni</th>
-    <th>Ultima</th><th>Prossima</th><th>Ultimo snapshot</th><th>Azioni</th>
+    <th class="col-sec">Ultima</th><th>Prossima</th><th>Ultimo snapshot</th><th>Azioni</th>
   </tr></thead>
   <tbody>
   <?php foreach ($rows as $r):
@@ -191,7 +192,7 @@ layout_masthead('watch');
           <button type="submit" title="Salva intervallo">↵</button>
         </form>
       </td>
-      <td class="nowrap"><?= h($r['last_run'] ? ts_local($r['last_run']) : '—') ?></td>
+      <td class="nowrap col-sec"><?= h($r['last_run'] ? ts_local($r['last_run']) : '—') ?></td>
       <td class="nowrap"><?= h($next_txt($r['last_run'], (int)$r['every_hours'], $en)) ?></td>
       <td class="nowrap">
         <?php if (!empty($r['last_short'])): ?>
@@ -215,6 +216,7 @@ layout_masthead('watch');
   <?php endforeach; ?>
   </tbody>
 </table>
+</div>
 
 <?php if ($pages > 1): ?>
   <nav class="pager">
