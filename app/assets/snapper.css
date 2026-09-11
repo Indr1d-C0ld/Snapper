@@ -1,0 +1,258 @@
+/* =======================================================================
+   Snapper — tema "Camera Oscura / Provino"  (marcato ma sobrio)
+   Nessun font esterno: stack di sistema, zero richieste di rete.
+   ======================================================================= */
+
+:root{
+  --bg:#17150f;            /* mat da camera oscura, nero caldo */
+  --bg-panel:#211d15;
+  --bg-sunk:#0d0c08;
+  --paper:#f2ecdd;         /* carta fotografica / manila */
+  --paper-2:#e6dbc2;
+  --ink:#1c1a15;
+  --muted:#9a927f;
+  --muted-2:#6f6857;
+  --line:#3b3427;          /* hairline scure sul mat */
+  --line-paper:#c8bd9f;    /* hairline su carta */
+  --safelight:#c8402f;     /* rosso safelight */
+  --amber:#d79a3f;
+  --develop:#7a9a6d;       /* verde "sviluppato", desaturato */
+  --fog:#c56b5c;           /* rosso "velato" */
+  --link:#d8cdb2;
+  --focus:#d79a3f;
+  --radius:3px;
+  --mono:ui-monospace,"SFMono-Regular","Cascadia Code",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.5;
+  color:var(--paper);
+  background:
+    radial-gradient(1200px 500px at 70% -10%, #241f16 0%, transparent 60%),
+    var(--bg);
+  padding:1.6rem clamp(.8rem,3vw,2.4rem) 4rem;
+}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:var(--amber);color:#1c1a15}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.wrap{max-width:1240px;margin:0 auto}
+
+/* ---- Masthead ------------------------------------------------------- */
+.masthead{
+  max-width:1240px;margin:0 auto 1.4rem;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;
+  padding-bottom:.7rem;border-bottom:2px solid var(--line);
+}
+.masthead h1{
+  margin:0;font-size:clamp(1.3rem,2.6vw,1.7rem);font-weight:800;
+  letter-spacing:.28em;text-transform:uppercase;color:var(--paper);
+}
+.masthead .tag{
+  display:block;margin-top:.25rem;
+  font:400 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--safelight);
+}
+.mast-nav{display:flex;gap:.5rem;align-items:center}
+.tab{
+  font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--paper);border:1px solid var(--line);
+  padding:.5rem .8rem;border-radius:var(--radius);background:var(--bg-panel);
+}
+.tab:hover{background:#2c2619;text-decoration:none}
+
+/* ---- Pannelli / form ---------------------------------------------- */
+.panels{display:grid;grid-template-columns:1.2fr .8fr;gap:1rem;margin-bottom:1.4rem}
+@media (max-width:820px){.panels{grid-template-columns:1fr}}
+
+.panel{
+  background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:1rem 1.1rem;
+}
+.panel h2{
+  margin:0 0 .7rem;font:700 11px/1 var(--sans);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted);
+}
+.panel form{display:grid;gap:.55rem;margin:0}
+label{font:600 12px/1 var(--sans);color:var(--paper)}
+input[type=url],input[type=text],input[type=search],input[type=password]{
+  width:100%;padding:.55rem .6rem;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--bg-sunk);color:var(--paper);font:14px/1.3 var(--mono);
+}
+input::placeholder{color:var(--muted-2)}
+.hint{font:12px/1.4 var(--sans);color:var(--muted)}
+.hint code{font-family:var(--mono);color:var(--paper-2)}
+
+button,.btn{
+  font:600 12px/1 var(--sans);letter-spacing:.06em;
+  padding:.6rem .9rem;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--paper);color:var(--ink);cursor:pointer;
+}
+button:hover,.btn:hover{background:var(--paper-2);text-decoration:none}
+button.ghost,.btn.ghost{background:transparent;color:var(--paper)}
+button.ghost:hover,.btn.ghost:hover{background:var(--bg-panel)}
+button.danger{background:transparent;color:var(--fog);border-color:#5b3a34}
+button.danger:hover{background:#2a1c19}
+
+/* ---- Barra strumenti (ricerca + toggle vista) -------------------- */
+.toolbar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:.7rem;
+  margin:0 0 1rem;padding-bottom:.8rem;border-bottom:1px dashed var(--line);
+}
+.toolbar form{display:flex;gap:.4rem;margin:0}
+.toolbar .grow{flex:1 1 220px}
+.count{font:12px/1 var(--mono);color:var(--muted)}
+.viewtoggle{display:flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.viewtoggle a{
+  padding:.5rem .8rem;font:600 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);background:var(--bg-panel);
+}
+.viewtoggle a.on{background:var(--paper);color:var(--ink)}
+.viewtoggle a:hover{text-decoration:none;color:var(--paper)}
+.viewtoggle a.on:hover{color:var(--ink)}
+
+/* ---- Timbri di stato -------------------------------------------- */
+.stamp{
+  display:inline-block;font:700 9.5px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;
+  border:2px solid currentColor;border-radius:2px;padding:.28em .5em;
+  transform:rotate(-3.5deg);opacity:.9;
+}
+.stamp.dev{color:var(--develop)}
+.stamp.run{color:var(--amber);animation:develop 1.7s ease-in-out infinite}
+.stamp.wait{color:var(--muted)}
+.stamp.err{color:var(--fog)}
+@keyframes develop{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.stamp.run{animation:none;opacity:.9}}
+
+/* ---- PROVINO: griglia di fotogrammi ---------------------------- */
+.sheet{
+  display:grid;gap:1.4rem 1.1rem;
+  grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+}
+.frame{
+  position:relative;background:var(--paper);color:var(--ink);
+  padding:9px 9px 11px;border:1px solid var(--line-paper);
+  box-shadow:0 1px 0 rgba(0,0,0,.45),0 10px 24px rgba(0,0,0,.38);
+}
+/* crocini di taglio sul mat, agli angoli del fotogramma */
+.frame::before,.frame::after{
+  content:"";position:absolute;width:12px;height:12px;pointer-events:none;
+  border:1.5px solid var(--line);
+}
+.frame::before{top:-6px;left:-6px;border-right:0;border-bottom:0}
+.frame::after{bottom:-6px;right:-6px;border-left:0;border-top:0}
+
+.frame .no{
+  position:absolute;top:-1px;left:-1px;z-index:2;
+  font:700 10px/1 var(--mono);letter-spacing:.05em;
+  background:var(--ink);color:var(--paper);padding:.32em .5em;
+}
+.frame .thumb{
+  display:block;position:relative;aspect-ratio:4/3;overflow:hidden;
+  background:var(--bg-sunk);border:1px solid var(--line-paper);
+}
+.frame .thumb img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+.frame .thumb.empty{display:grid;place-items:center}
+.frame .thumb.empty span{font:600 10px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.frame .thumb .st{position:absolute;left:6px;bottom:6px;background:rgba(242,236,221,.92);padding:2px 4px}
+
+.frame figcaption{margin-top:.55rem;display:grid;gap:.15rem}
+.frame .dom{
+  font:700 12.5px/1.25 var(--mono);color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.frame .meta{font:11px/1.3 var(--mono);color:var(--muted-2);display:flex;gap:.5rem;justify-content:space-between}
+.frame .ttl{font:12px/1.35 var(--sans);color:#4b463a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.frame .ops{
+  margin-top:.55rem;padding-top:.5rem;border-top:1px solid var(--line-paper);
+  display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;
+}
+.frame .ops a,.frame .ops button{
+  font:600 10px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;
+  padding:.4em .5em;border:1px solid var(--line-paper);border-radius:2px;
+  background:transparent;color:#4b463a;cursor:pointer;
+}
+.frame .ops a:hover,.frame .ops button:hover{background:var(--paper-2);text-decoration:none}
+.frame .ops form{display:inline;margin:0}
+.frame .ops .spring{margin-left:auto}
+
+/* pin / "selezione" col cerchio grease-pencil */
+.pin{position:absolute;top:-9px;right:-9px;z-index:3;width:30px;height:30px;
+  border:0;background:transparent;cursor:pointer;padding:0;line-height:0}
+.pin svg{width:30px;height:30px;display:block}
+.pin .ring{stroke:var(--safelight);stroke-width:3;fill:none;opacity:0;transform-origin:center;transform:rotate(-8deg)}
+.frame.pinned .pin .ring{opacity:.95}
+.pin:hover .ring{opacity:.4}
+.frame.pinned{box-shadow:0 1px 0 rgba(0,0,0,.45),0 10px 24px rgba(0,0,0,.38),0 0 0 2px rgba(200,64,47,.25)}
+
+/* ---- REGISTRO: tabella --------------------------------------- */
+.ledger{width:100%;border-collapse:collapse;font-size:13.5px}
+.ledger th,.ledger td{border:1px solid var(--line);padding:.5rem .6rem;vertical-align:top;text-align:left}
+.ledger th{
+  background:var(--bg-panel);font:700 10px/1 var(--sans);letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap;
+}
+.ledger tr:hover td{background:#1e1a12}
+.ledger td.nowrap{white-space:nowrap}
+.ledger .u{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.ledger .mini{width:104px}
+.ledger .mini img{width:96px;height:64px;object-fit:cover;object-position:top;border:1px solid var(--line);background:var(--bg-sunk);display:block}
+.ledger a.permalink{font-family:var(--mono);font-size:12px}
+.ledger .dl{font:11px/1.6 var(--mono)}
+mark{background:var(--amber);color:#1c1a15;padding:0 .1em}
+
+/* ---- Paginazione / stati vuoti ------------------------------ */
+.pager{display:flex;gap:.5rem;justify-content:center;margin:1.8rem 0 0}
+.pager a,.pager span{
+  font:600 12px/1 var(--mono);padding:.5rem .8rem;border:1px solid var(--line);
+  border-radius:var(--radius);color:var(--paper);background:var(--bg-panel);
+}
+.pager span.cur{background:var(--paper);color:var(--ink)}
+.pager a:hover{background:#2c2619;text-decoration:none}
+
+.empty{
+  border:1px dashed var(--line);border-radius:var(--radius);
+  padding:2.5rem 1rem;text-align:center;color:var(--muted);
+  font:13px/1.6 var(--mono);
+}
+
+.flash{
+  border-left:3px solid var(--safelight);background:var(--bg-panel);
+  padding:.7rem .9rem;margin-bottom:1rem;font:13px/1.5 var(--sans);color:var(--paper-2);
+}
+.flash.ok{border-left-color:var(--develop)}
+
+/* ---- Login ------------------------------------------------- */
+.login-shell{min-height:70vh;display:grid;place-items:center}
+.mount{
+  width:min(400px,92vw);background:var(--bg-panel);
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:1.6rem 1.6rem 1.8rem;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+.mount .filmtab{
+  font:700 10px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;
+  color:var(--safelight);margin-bottom:.2rem;
+}
+.mount h1{margin:.1rem 0 1.2rem;font-size:1.5rem;letter-spacing:.24em;text-transform:uppercase;color:var(--paper)}
+.mount form{display:grid;gap:.7rem}
+.mount .err{color:var(--fog);font:12px/1.4 var(--mono)}
+.mount .note{color:var(--muted);font:11px/1.4 var(--mono);text-align:center;margin-top:.4rem}
+
+/* ---- Stampa: contact sheet su carta bianca ---------------- */
+@media print{
+  body{background:#fff;color:#111;padding:0}
+  .masthead{border-color:#999}
+  .masthead h1,.masthead .tag{color:#111}
+  .toolbar,.panels,.mast-nav,.frame .ops,.pin,.pager{display:none !important}
+  .sheet{gap:.5rem;grid-template-columns:repeat(4,1fr)}
+  .frame{box-shadow:none;border-color:#bbb;break-inside:avoid}
+  .frame::before,.frame::after{border-color:#bbb}
+}

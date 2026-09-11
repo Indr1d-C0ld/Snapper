@@ -1,0 +1,46 @@
+# /etc/apache2/conf-available/snapper-archives.conf
+# Isola gli archivi (mirror di siti terzi) dal resto dell'applicazione.
+# Attiva con:  sudo a2enmod headers ; sudo a2enconf snapper-archives ; sudo systemctl reload apache2
+#
+# NB: richiede "AllowOverride" NON necessario (config a livello server).
+# Idealmente servi /archives/ da un HOSTNAME separato (es. archive.example.org):
+# in tal caso sposta questo blocco in quel VirtualHost e il cookie di sessione
+# (path /snapper/, host applicativo) non raggiungerà mai gli archivi.
+
+<Directory /var/www/html/archives>
+    Options -ExecCGI -Includes -Indexes +FollowSymLinks
+    AllowOverride None
+    Require all granted
+
+    # 1) Niente esecuzione di codice dai file archiviati
+    RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .pl .py .cgi .rb .lua
+    RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8
+    <FilesMatch "\.(php|phtml|php[0-9]|pl|py|cgi|rb|lua)$">
+        SetHandler none
+        Require all denied
+    </FilesMatch>
+    # mod_php (se presente)
+    <IfModule mod_php.c>
+        php_admin_flag engine off
+    </IfModule>
+
+    # 2) Sandbox del browser: nessuno script, nessun accesso a cookie/storage
+    <IfModule mod_headers.c>
+        Header always set Content-Security-Policy "sandbox allow-forms allow-popups allow-top-navigation allow-modals; default-src 'self' data: blob:; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+        Header always set X-Content-Type-Options "nosniff"
+        Header always set Referrer-Policy "no-referrer"
+        Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+        Header always set Cross-Origin-Resource-Policy "same-site"
+        Header always unset X-Powered-By
+    </IfModule>
+</Directory>
+
+# Blocca l'accesso web diretto agli include non-entrypoint dell'app
+<Directory /var/www/html/snapper>
+    <FilesMatch "^(config|lib|worker-db|drain)\.php$">
+        Require all denied
+    </FilesMatch>
+    <FilesMatch "\.(sh|db|log|sqlite)$">
+        Require all denied
+    </FilesMatch>
+</Directory>

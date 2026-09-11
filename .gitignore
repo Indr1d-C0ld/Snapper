@@ -1,0 +1,26 @@
+# Configurazione reale (copia da app/config.sample.php)
+app/config.php
+
+# Segreti
+auth.php
+/etc/
+
+# Database e dati locali
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+/srv/
+snapshots/
+archives/
+ratelimit/
+*.log
+
+# Bundle di lavoro
+*.tar.gz
+*.zip
+
+# Sistema / editor
+.DS_Store
+*.swp
+*~

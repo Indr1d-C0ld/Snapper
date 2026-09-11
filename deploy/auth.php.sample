@@ -1,0 +1,18 @@
+<?php
+/* /etc/snapper/auth.php   —   chmod 640 root:www-data
+ *
+ * Genera l'hash:
+ *   php -r 'echo password_hash("LA-TUA-PASSWORD-LUNGA", PASSWORD_BCRYPT, ["cost"=>12]), PHP_EOL;'
+ *
+ * 2FA (facoltativa ma consigliata per un servizio esposto):
+ *   - genera un segreto base32 da 32 caratteri, es.:
+ *     php -r '$a="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";$s="";for($i=0;$i<32;$i++)$s.=$a[random_int(0,31)];echo $s,PHP_EOL;'
+ *   - caricalo in un'app TOTP con:
+ *     otpauth://totp/Snapper:admin?secret=IL_SEGRETO&issuer=Snapper&period=30&digits=6
+ *   - incolla il segreto in 'totp_secret' qui sotto (null = 2FA disattivata)
+ */
+return [
+    'user'        => 'admin',
+    'hash'        => '$2y$12$REPLACE_ME_WITH_A_REAL_BCRYPT_HASH..........................',
+    'totp_secret' => null,
+];
