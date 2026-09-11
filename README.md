@@ -66,6 +66,7 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `app/migrate.php` | migrazione idempotente dello schema |
 | `app/cron-snapper.sh` | coda + ri-catture programmate + recupero worker morti |
 | `app/backup.sh` | backup del DB (`.backup`) e del codice, con rotazione |
+| `app/ots-upgrade.sh` | completa le marche OpenTimestamps "in sospeso" (cron separato, bassa frequenza) |
 | `app/snapper-perms.sh` | verifica/ripristino di permessi e ownership |
 | `app/assets/snapper.css` | tema «Camera Oscura / Provino» (nessun asset esterno) |
 | `deploy/apache-archives.conf.sample` | sandbox degli archivi + stop all'esecuzione di codice |
@@ -146,8 +147,15 @@ Crea un venv dedicato in `/opt/opentimestamps`, un symlink in `/usr/local/bin/ot
 (già nel `PATH` con cui `save.php`/`resnap.php`/`drain.php` avviano il worker), e
 chiude con una marca temporale di prova reale eseguita come `www-data`. Una volta
 installato il worker lo rileva da solo. Le marche restano "in sospeso" finché non
-confermate su Bitcoin (di norma qualche ora); per completarle:
-`sudo -u www-data ots upgrade <short>/SHA256SUMS.ots`.
+confermate su Bitcoin (di norma qualche ora). Per completarle **automaticamente**,
+`app/ots-upgrade.sh` — cron **separato** da quello della coda, a bassa frequenza
+di proposito (i calendar server sono infrastruttura pubblica gratuita):
+
+```
+0 */6 * * * /var/www/html/snapper/ots-upgrade.sh >> /srv/snapshots/ots-upgrade.log 2>&1
+```
+
+In alternativa, a mano: `sudo -u www-data ots upgrade <short>/SHA256SUMS.ots`.
 
 ## Licenza
 

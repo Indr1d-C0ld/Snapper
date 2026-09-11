@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-11 (3) — Completamento automatico delle marche OpenTimestamps
+
+- **`app/ots-upgrade.sh`** (nuovo, deployato come `cron-snapper.sh`/`backup.sh`):
+  cron **separato** da quello della coda, ogni 6 ore di proposito (i calendar
+  server OpenTimestamps sono infrastruttura pubblica gratuita — interrogarli
+  più spesso non avrebbe senso visti i tempi di conferma Bitcoin). Per ogni
+  snapshot con `ots_status='stamped'` lancia `ots upgrade` con una cache
+  scrivibile dedicata (`/srv/snapshots/.ots-cache`, stesso bug HOME/cache già
+  visto nel self-test di `install-ots.sh`, qui risolto in modo permanente);
+  se trova un'attestazione Bitcoin confermata (`BitcoinBlockHeaderAttestation`
+  nell'output di `ots info` — corretto anche con altri calendar ancora
+  pending: basta una prova valida) segna `ots_status='complete'` nel DB e
+  aggiorna la riga "OpenTimestamps: stamped" nella pagina statica di quello
+  snapshot.
+- `ots_status` ha ora tre stati: `none` → `stamped` → `complete`.
+- README/CHANGELOG: istruzioni e riga di crontab per `ots-upgrade.sh`.
+
 ## 2026-09-11 (2) — Interfaccia responsive + OpenTimestamps attivabile
 
 - **Mobile/tablet**: nuove regole tutte dentro `@media (max-width:640px)` (o
