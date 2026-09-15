@@ -1,5 +1,51 @@
 # Changelog
 
+## 2026-09-15 (4) — Audit fase 4: rifiniture di sicurezza e correttezza
+
+Ultima fase correttiva dell'audit. Chiude i rilievi minori rimasti.
+
+- **Escape mancante** (`app/worker.sh`): stato HTTP, `Content-Type` e link alla
+  copia statica finivano grezzi nella scheda dell'archivio, pur provenendo da un
+  server terzo che li controlla. Non erano sfruttabili per eseguire codice — la
+  CSP `sandbox` degli archivi lo impedisce — ma la CSP non deve restare l'unica
+  barriera. Ora passano tutti da `esc()`.
+- **Ricerca persa selezionando una prova** (`app/pin.php`, `app/index.php`): il
+  filtro anti-redirect applicato all'URL già assemblato rifiutava qualunque
+  ricerca con uno spazio (codificato `+`) o con virgolette — cioè il caso
+  normale — riportando all'elenco completo. La destinazione viene ora
+  ricostruita dai singoli parametri validati: il redirect verso host esterni
+  resta impossibile per costruzione, perché l'URL lo compone l'applicazione.
+- **Ordine di cancellazione** (`app/delete.php`): prima il disco, poi il
+  database. Cancellando prima le righe, un fallimento su disco lasciava cartelle
+  orfane non più elencate — spazio occupato e invisibile. Ora un fallimento
+  lascia lo snapshot visibile e ri-eliminabile, con avviso esplicito.
+- **Lettura confinata** (`app/worker-db.php`): `body_file` arriva da stdin e
+  viene ora vincolato alla cartella dati via `realpath`.
+- **CSRF sul login** (`app/login.php`): token anche sul modulo di accesso. Un
+  POST respinto per token mancante **non consuma tentativi** di throttling, non
+  essendo un tentativo di password. Aggiunta inoltre una penalità fissa di
+  750 ms su ogni fallimento: il backoff per IP non morde un attacco
+  distribuito, e un blocco globale permetterebbe a un terzo di chiudere fuori
+  l'utente legittimo.
+- **Chromium senza telemetria** (`app/worker.sh`): `--disable-background-networking`,
+  `--disable-component-update`, `--disable-sync` e affini. Un archiviatore non
+  deve contattare i servizi del browser; verificato, azzera quelle connessioni.
+- `app/snapper-perms.sh` riconosce `.ots-cache`, i log operativi e i `.gz`
+  prodotti da logrotate.
+
+### Due rilievi rientrati, non corretti
+
+- **Prestazioni**: avevo misurato 89 secondi per archiviare una pagina semplice.
+  Rimisurando con i tempi per singola fase il worker impiega **4,6 secondi**:
+  gli 89 s erano il costo una tantum della primissima esecuzione di Chromium
+  (inizializzazione componenti e tentativi verso i servizi Google). Non era un
+  difetto sistemico. I flag qui sopra restano un miglioramento a sé.
+- **`SHA256SUMS` non copre `bundle.zip`**: non è correggibile ed è corretto
+  così. Il bundle *contiene* il manifesto, quindi includervi l'impronta del
+  bundle sarebbe circolare. La verifica si fa estraendo l'archivio e
+  controllando i file contro il `SHA256SUMS` che vi si trova dentro — ed è quel
+  manifesto a portare la marca temporale.
+
 ## 2026-09-15 (3) — Audit fase 3: pulizia del profilo Chromium e coda atomica
 
 ### Ogni cattura non abbandona più 4,8 MB sul disco

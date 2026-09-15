@@ -133,7 +133,9 @@ layout_masthead('sheet');
         <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
         <input type="hidden" name="short" value="<?= h($short) ?>">
         <input type="hidden" name="to" value="<?= $pinned ? '0' : '1' ?>">
-        <input type="hidden" name="back" value="<?= h($mkurl([])) ?>">
+        <input type="hidden" name="q" value="<?= h($q) ?>">
+        <input type="hidden" name="view" value="<?= h($view) ?>">
+        <input type="hidden" name="page" value="<?= $page ?>">
         <button type="submit" aria-label="selezione">
           <svg viewBox="0 0 30 30"><ellipse class="ring" cx="15" cy="15" rx="12" ry="9"/></svg>
         </button>

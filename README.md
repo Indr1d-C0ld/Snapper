@@ -20,7 +20,10 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
   titolo, URL e corpo del testo; OCR di fallback (`tesseract`) per le pagine
   senza testo estraibile.
 - **Integrità**: `SHA256SUMS` di tutti gli artefatti e, se `ots` è installato,
-  marca temporale OpenTimestamps.
+  marca temporale OpenTimestamps sul manifesto. Per verificare un bundle:
+  estrarlo e controllarne i file contro il `SHA256SUMS` che contiene — è quel
+  manifesto a portare la marca (includervi l'impronta del bundle, che a sua
+  volta contiene il manifesto, sarebbe circolare).
 - **Validazione della cattura**: se il server non risponde affatto, la cattura
   viene marcata `error` invece di archiviare (e marcare temporalmente) la
   schermata d'errore del browser. Una risposta `4xx`/`5xx` resta archiviabile —
@@ -42,9 +45,13 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 - **2FA TOTP** opzionale (RFC 6238, verifica self-contained).
 - Sessione: cookie `HttpOnly` + `SameSite=Lax` + `Secure` su HTTPS, path
   ristretto, `session_regenerate_id` al login, timeout di inattività e assoluto.
-- **Rate-limiting** del login per IP con backoff progressivo; tentativi
-  registrati in un log dedicato.
-- **CSRF** su tutte le azioni POST.
+- **Rate-limiting** del login per IP con backoff progressivo, più una penalità
+  fissa su ogni tentativo fallito (il backoff per IP non morde un attacco
+  distribuito, e un blocco globale permetterebbe a un terzo di chiudere fuori
+  l'utente legittimo); tentativi registrati in un log dedicato.
+- **CSRF** su tutte le azioni POST, **login compreso**.
+- Il browser di cattura gira senza telemetria né aggiornamento componenti:
+  nessuna connessione in uscita oltre al sito che stai archiviando.
 - **Anti-SSRF**: gli URL da archiviare vengono risolti e rifiutati se puntano a
   indirizzi loopback / privati / link-local; ricontrollo dopo i redirect, sia
   lato PHP sia nel worker.

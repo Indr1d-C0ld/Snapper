@@ -33,6 +33,7 @@ LOGF="$DATA/worker.log"
 AUTHLOG="$DATA/auth.log"
 RLDIR="$DATA/ratelimit"
 QLOCK="$DATA/.queue.lock"
+OTSCACHE="$DATA/.ots-cache"
 SECRETDIR="/etc/snapper"
 SECRET="$SECRETDIR/auth.php"
 
@@ -73,6 +74,14 @@ recur_data(){
   ensure_file "$AUTHLOG" 640 "$WEBUSER" "$WEBGROUP"
   ensure_file "$QLOCK"   644 "$WEBUSER" "$WEBGROUP"
   ensure_dir  "$RLDIR"   750 "$WEBUSER" "$WEBGROUP"
+  ensure_dir  "$OTSCACHE" 755 "$WEBUSER" "$WEBGROUP"
+  # log operativi: creati da cron, devono restare scrivibili da www-data
+  for lg in cron.log backup.log ots-upgrade.log; do
+    ensure_file "$DATA/$lg" 640 "$WEBUSER" "$WEBGROUP"
+  done
+  # i .gz prodotti da logrotate
+  while IFS= read -r -d '' f; do ensure_file "$f" 640 "$WEBUSER" "$WEBGROUP"; done \
+    < <(find "$DATA" -maxdepth 1 -name '*.log.*' -print0 2>/dev/null)
 }
 
 recur_arch(){

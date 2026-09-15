@@ -14,7 +14,15 @@ $err    = '';
 $expired = isset($_GET['expired']);
 $needTotp = AUTH_TOTP_SECRET !== null && AUTH_TOTP_SECRET !== '';
 
+$csrf = csrf_token();   // token di sessione, valido anche prima dell'accesso
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
+        // Sessione scaduta o richiesta di terze parti: non contiamo il
+        // tentativo nel throttling, non è un tentativo di password.
+        $err = 'Sessione scaduta, riprova.';
+        audit("LOGIN csrf ip=$ip");
+    } else {
     [$allowed, $wait] = login_gate($ip);
     if (!$allowed) {
         $err = "Troppi tentativi. Riprova tra {$wait}s.";
@@ -44,8 +52,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         audit("LOGIN fail ip=$ip user=" . ($userOk ? 'ok' : 'no')
             . " pass=" . ($passOk ? 'ok' : 'no')
             . " totp=" . ($totpOk ? 'ok' : 'no'));
+        // Freno costante su OGNI tentativo fallito: il backoff di login_gate()
+        // è per singolo IP e non morde un attacco distribuito. Un ritardo fisso
+        // ne limita il ritmo senza introdurre un blocco globale, che darebbe a
+        // un terzo il modo di chiudere fuori l'utente legittimo.
+        usleep(750000);
         // messaggio volutamente generico
         $err = 'Credenziali non valide.';
+    }
     }
 }
 
@@ -58,6 +72,7 @@ layout_head('Snapper — accesso');
     <?php if ($expired): ?><p class="err">Sessione scaduta, effettua di nuovo l'accesso.</p><?php endif; ?>
     <?php if ($err !== ''): ?><p class="err"><?= h($err) ?></p><?php endif; ?>
     <form method="post" autocomplete="off">
+      <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
       <label for="u">Utente</label>
       <input id="u" name="u" required autofocus autocomplete="username">
       <label for="p">Password</label>

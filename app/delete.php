@@ -19,6 +19,23 @@ if (!preg_match('/^[A-Za-z0-9]{5,12}$/', $short)) {
 $root = DATA_DIR . '/' . $short;
 $arch = ARCH_DIR . '/' . $short;
 
+/* Ordine deliberato: prima il disco, poi il database. Cancellando prima le
+ * righe, un fallimento su disco lascerebbe cartelle orfane che l'applicazione
+ * non elenca più — spazio occupato e invisibile. Così invece un fallimento
+ * lascia lo snapshot ancora in elenco, visibile e ri-eliminabile. */
+if (is_link($arch) || file_exists($arch)) {
+    @unlink($arch);
+}
+if (is_dir($root) && str_starts_with(realpath($root) ?: '', DATA_DIR . '/')) {
+    rrmdir($root);
+    if (is_dir($root)) {
+        audit("DELETE fallita ip=" . client_ip() . " short=$short (rimozione su disco incompleta)");
+        $_SESSION['flash'] = "Eliminazione di $short non riuscita: file ancora presenti su disco. Snapshot mantenuto in elenco.";
+        header('Location: /snapper/index.php');
+        exit;
+    }
+}
+
 $pdo = db();
 $pdo->beginTransaction();
 $pdo->prepare('DELETE FROM snapshots WHERE short=?')->execute([$short]);
@@ -26,13 +43,6 @@ $pdo->prepare('DELETE FROM snapshots_fts WHERE short=?')->execute([$short]);
 // il watch resta: si gestisce da watches.php. Sgancia solo il riferimento.
 $pdo->prepare('UPDATE watches SET last_short=NULL WHERE last_short=?')->execute([$short]);
 $pdo->commit();
-
-if (is_link($arch) || file_exists($arch)) {
-    @unlink($arch);
-}
-if (is_dir($root) && str_starts_with(realpath($root) ?: '', DATA_DIR . '/')) {
-    rrmdir($root);
-}
 
 audit("DELETE ip=" . client_ip() . " short=$short");
 $_SESSION['flash'] = "Snapshot $short eliminato.";

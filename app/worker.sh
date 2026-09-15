@@ -166,6 +166,9 @@ if [ -n "$MONOLITH" ]; then
 fi
 if [ ! -s "$SF" ] && [ -n "$CHROME" ]; then
   DD_OPTS=(--headless --no-sandbox --disable-gpu --disable-dev-shm-usage
+           --no-first-run --no-default-browser-check --disable-background-networking
+           --disable-component-update --disable-sync --disable-default-apps
+           --metrics-recording-only
            --virtual-time-budget=8000 --user-agent="$UA" "--user-data-dir=$ROOT/.home/.chromium")
   if [ -n "$TIMEOUT" ]; then
     "$TIMEOUT" 90 "$CHROME" "${DD_OPTS[@]}" --dump-dom "$RENDER_URL" > "$SF" 2>/dev/null || log "dump-dom fallito"
@@ -182,7 +185,13 @@ fi
 
 # ---- 6) screenshot piena pagina + PDF (Chromium headless) ------
 if [ -n "$CHROME" ]; then
+  # I flag --disable-*: un archiviatore non deve contattare i servizi del
+  # browser (aggiornamento componenti, sync, GCM). Eliminano connessioni in
+  # uscita non richieste e il costo di inizializzazione al primo avvio.
   CHR_OPTS=(--headless --no-sandbox --disable-gpu --disable-dev-shm-usage
+            --no-first-run --no-default-browser-check --disable-background-networking
+            --disable-component-update --disable-sync --disable-default-apps
+            --metrics-recording-only
             --hide-scrollbars --force-color-profile=srgb --window-size=1366,900
             --virtual-time-budget=8000 --run-all-compositor-stages-before-draw
             --user-agent="$UA" "--user-data-dir=$ROOT/.home/.chromium")
@@ -287,6 +296,11 @@ SHOT_SHA="$( [ -s "$ROOT/shot.png" ] && "$SHA" "$ROOT/shot.png" 2>/dev/null | cu
 # ---- 11) pagina indice (scheda provino) --------------------
 esc(){ "$PHP" -r 'echo htmlspecialchars($argv[1], ENT_QUOTES);' "$1"; }
 T_H="$(esc "${TITLE:-$URL}")"; U_H="$(esc "$URL")"; FU_H="$(esc "${FINAL_URL:-$URL}")"
+# Anche stato e content-type vengono da un server terzo, che li controlla: la
+# CSP sandbox degli archivi impedisce l'esecuzione di script, ma non deve
+# restare l'unica barriera.
+CODE_H="$(esc "${HTTP_CODE:-n/d}")"; CTYPE_H="$(esc "${CTYPE:-n/d}")"
+REL_H="$(esc "$LINK")"
 DIFF_CHIP=""
 [ -s "$ROOT/diff.png" ] && DIFF_CHIP='<a href="diff.png">Diff visivo'"${DIFF_PCT:+ (${DIFF_PCT}%)}"'</a>'
 SF_CHIP=""
@@ -320,13 +334,13 @@ cat > "$ROOT/index.html" <<HTML
  <dl>
   <dt>Origine</dt><dd><a href="${U_H}" rel="noopener noreferrer">${U_H}</a></dd>
   <dt>URL finale</dt><dd>${FU_H}</dd>
-  <dt>HTTP</dt><dd>${HTTP_CODE:-n/d} &middot; ${CTYPE:-n/d}</dd>
+  <dt>HTTP</dt><dd>${CODE_H} &middot; ${CTYPE_H}</dd>
   <dt>SHA-256 PNG</dt><dd>${SHOT_SHA:-n/d}</dd>
   <dt>Timestamp</dt><dd>OpenTimestamps: ${OTS_STATUS}</dd>
   <dt>Variazione</dt><dd>${DIFF_PCT:-n/d}${DIFF_PCT:+ % rispetto alla versione precedente}</dd>
  </dl>
  <div class="chips">
-  <a href="${LINK}">Copia statica</a>
+  <a href="${REL_H}">Copia statica</a>
   ${SF_CHIP}
   <a href="shot.png">Screenshot PNG</a>
   <a href="page.pdf">PDF</a>

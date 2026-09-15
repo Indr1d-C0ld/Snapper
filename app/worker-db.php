@@ -42,9 +42,16 @@ switch ($op) {
         break;
 
     case 'ready':
+        // body_file arriva da stdin: confiniamolo alla cartella dati, così
+        // resta una lettura di artefatti e non una lettura di file arbitrari.
         $body = '';
-        if (!empty($in['body_file']) && is_file($in['body_file'])) {
-            $body = (string)file_get_contents($in['body_file'], false, null, 0, 5_242_880);
+        if (!empty($in['body_file'])) {
+            $bf = realpath((string)$in['body_file']);
+            if ($bf !== false && str_starts_with($bf, DATA_DIR . '/') && is_file($bf)) {
+                $body = (string)file_get_contents($bf, false, null, 0, 5_242_880);
+            } elseif ($bf !== false) {
+                fwrite(STDERR, "body_file fuori da " . DATA_DIR . ", ignorato: $bf\n");
+            }
         }
         // status_msg porta l'eventuale avviso di cattura (es. HTTP 4xx/5xx):
         // lo snapshot resta valido e consultabile, ma l'interfaccia lo segnala.
