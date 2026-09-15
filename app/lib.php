@@ -66,9 +66,72 @@ function validate_public_url(string $url): array
 
 /* ---- Coda di cattura --------------------------------------------- */
 
+/* PATH con cui viene avviato il worker: volutamente ristretto, ma deve
+ * includere /usr/local/bin, dove vive il software non pacchettizzato da apt
+ * (es. `ots`). Definito qui una volta sola: prima era ripetuto in quattro file
+ * e una correzione andava replicata a mano ovunque. */
+const WORKER_PATH = '/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin';
+
 /**
- * Inserisce uno snapshot 'pending' e avvia il worker se siamo sotto
- * MAX_CONCURRENCY, altrimenti lo lascia in coda (lo raccoglierà drain.php/cron).
+ * Avvia il worker per uno snapshot 'pending', se siamo sotto MAX_CONCURRENCY.
+ * PRESUPPONE che il chiamante detenga già il lock della coda: non acquisirlo
+ * qui è ciò che permette a drain.php di ciclare tenendolo per tutto il giro.
+ * @return bool worker effettivamente avviato
+ */
+function spawn_worker_locked(string $short, string $url): bool
+{
+    $pdo = db();
+    $running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running'")->fetch()['c'];
+    if ($running >= MAX_CONCURRENCY) {
+        return false;
+    }
+    // La transizione pending->running è anche la guardia contro un doppio avvio
+    // dello stesso short: se un altro processo ci ha preceduto, rowCount è 0.
+    $upd = $pdo->prepare("UPDATE snapshots SET status='running' WHERE short=? AND status='pending'");
+    $upd->execute([$short]);
+    if ($upd->rowCount() === 0) {
+        return false;
+    }
+    $cmd = 'PATH=' . WORKER_PATH . ' nohup '
+        . escapeshellarg(WORKER) . ' ' . escapeshellarg($short) . ' ' . escapeshellarg($url)
+        . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';
+    shell_exec($cmd);
+    return true;
+}
+
+/**
+ * Esegue $fn tenendo il lock della coda. Non usarlo se il lock è già detenuto
+ * dallo stesso processo: flock su un secondo descrittore si bloccherebbe da sé.
+ * Se il lock non è ottenibile in mezzo secondo rinuncia ed esegue $fallback:
+ * lasciare lo snapshot in coda è sempre preferibile ad appendere la richiesta
+ * web, tanto drain.php lo raccoglie al giro successivo.
+ */
+function with_queue_lock(callable $fn, callable $fallback)
+{
+    $fh = @fopen(QUEUE_LOCK, 'c');
+    if ($fh === false) {
+        return $fallback();
+    }
+    try {
+        for ($i = 0; $i < 10; $i++) {
+            if (flock($fh, LOCK_EX | LOCK_NB)) {
+                try {
+                    return $fn();
+                } finally {
+                    flock($fh, LOCK_UN);
+                }
+            }
+            usleep(50000);
+        }
+        return $fallback();
+    } finally {
+        fclose($fh);
+    }
+}
+
+/**
+ * Inserisce uno snapshot 'pending' e prova ad avviarlo subito, rispettando
+ * MAX_CONCURRENCY; altrimenti resta in coda (lo raccoglie drain.php/cron).
  * @return array{0:string,1:bool}  [short, avviato_subito]
  */
 function enqueue_capture(string $url, ?string $title, ?string $parentShort = null): array
@@ -80,17 +143,14 @@ function enqueue_capture(string $url, ?string $title, ?string $parentShort = nul
     $pdo->prepare('INSERT INTO snapshots(short, url, title, status, parent_short) VALUES(?,?,?,?,?)')
         ->execute([$short, $url, $title, 'pending', $parentShort]);
 
-    $running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running'")->fetch()['c'];
-    if ($running >= MAX_CONCURRENCY) {
-        return [$short, false];
-    }
-    $pdo->prepare("UPDATE snapshots SET status='running' WHERE short=? AND status='pending'")
-        ->execute([$short]);
-    $cmd = 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin nohup '
-        . escapeshellarg(WORKER) . ' ' . escapeshellarg($short) . ' ' . escapeshellarg($url)
-        . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';
-    shell_exec($cmd);
-    return [$short, true];
+    // Conteggio e avvio devono essere atomici fra i vari punti d'ingresso,
+    // altrimenti due richieste simultanee leggono lo stesso conteggio e
+    // superano entrambe il limite di worker.
+    $started = with_queue_lock(
+        fn() => spawn_worker_locked($short, $url),
+        fn() => false
+    );
+    return [$short, $started];
 }
 
 /** capostipite della catena di versioni per uno short dato (o lo short stesso) */

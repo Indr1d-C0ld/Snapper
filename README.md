@@ -29,7 +29,9 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
   Snapper calcola la percentuale di pixel cambiati e produce un `diff.png`.
 - **Watch programmati**: osserva un URL e ri-catturalo ogni N ore (pagina di
   gestione dedicata; esecuzione via cron).
-- **Coda** con `flock` e limite di concorrenza; recupero dei worker interrotti.
+- **Coda** con `flock`: conteggio, presa in carico e avvio dei worker sono
+  atomici fra tutti i punti d'ingresso, quindi il limite di concorrenza vale
+  anche sotto richieste simultanee; recupero dei worker interrotti.
 - **Due viste**: *Provino* (griglia di fotogrammi) e *Registro* (tabella),
   paginazione, filtro rapido lato client, stampa come contact sheet.
 

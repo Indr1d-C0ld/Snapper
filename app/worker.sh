@@ -9,6 +9,13 @@ export LANG=C LC_ALL=C
 SHORT="${1:?short mancante}"
 URL="${2:?url mancante}"
 
+# Lo short viene sempre da safe_short(), ma finisce in percorsi che poi
+# vengono rimossi: validarlo qui costa nulla e chiude la strada a un
+# "../.." che arrivasse un domani da un punto d'ingresso nuovo.
+case "$SHORT" in
+  *[!A-Za-z0-9]*|"") echo "short non valido: $SHORT" >&2; exit 2 ;;
+esac
+
 ROOT="/srv/snapshots/${SHORT}"
 ARCH="/var/www/html/archives"
 LOG="/srv/snapshots/worker.log"
@@ -46,6 +53,13 @@ fail(){
   exit 1
 }
 trap 'fail "errore imprevisto alla riga $LINENO"' ERR
+
+# Il profilo Chromium per-cattura pesa ~5 MB e non serve piu' a nulla una volta
+# prodotti gli artefatti. Senza questa pulizia resterebbe su disco per sempre,
+# ed essendo escluso da size_bytes, dallo ZIP e dai backup la crescita sarebbe
+# pure invisibile. Su EXIT, quindi vale anche per i fallimenti.
+cleanup_home(){ [ -n "${ROOT:-}" ] && rm -rf "$ROOT/.home" 2>/dev/null || true; }
+trap cleanup_home EXIT
 
 # ---- guardia anti-SSRF lato shell -----------------------------------------
 host_of_url(){ printf '%s' "$1" | sed -E 's#^[a-zA-Z]+://([^/@]*@)?([^/:?#]+).*#\2#'; }

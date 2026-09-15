@@ -9,6 +9,7 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 require __DIR__ . '/config.php';
+require __DIR__ . '/lib.php';
 
 $lock = fopen(QUEUE_LOCK, 'c');
 if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
@@ -17,22 +18,15 @@ if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
 
 $pdo = db();
 $spawned = 0;
+// Teniamo il lock per tutto il giro: spawn_worker_locked() lo presuppone e non
+// tenta di riacquisirlo (lo farebbe su un secondo descrittore, bloccandosi).
 while (true) {
-    $running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running'")->fetch()['c'];
-    if ($running >= MAX_CONCURRENCY) break;
-
     $row = $pdo->query("SELECT short, url FROM snapshots WHERE status='pending' ORDER BY ts ASC LIMIT 1")->fetch();
     if (!$row) break;
 
-    $upd = $pdo->prepare("UPDATE snapshots SET status='running' WHERE short=? AND status='pending'");
-    $upd->execute([$row['short']]);
-    if ($upd->rowCount() === 0) continue;
-
-    $cmd = 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin nohup '
-        . escapeshellarg(WORKER) . ' '
-        . escapeshellarg((string)$row['short']) . ' ' . escapeshellarg((string)$row['url'])
-        . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';
-    shell_exec($cmd);
+    if (!spawn_worker_locked((string)$row['short'], (string)$row['url'])) {
+        break;   // limite di concorrenza raggiunto, o preso da qualcun altro
+    }
     $spawned++;
     usleep(200000);
 }

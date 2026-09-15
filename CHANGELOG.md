@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-09-15 (3) — Audit fase 3: pulizia del profilo Chromium e coda atomica
+
+### Ogni cattura non abbandona più 4,8 MB sul disco
+
+Il profilo Chromium per-cattura (`$ROOT/.home`), creato per evitare gli errori
+di cache del browser, non veniva mai rimosso: 214 file, ~4,8 MB **per singola
+prova**. Essendo escluso dal calcolo di `size_bytes`, dal bundle ZIP e dai
+backup, la crescita era invisibile ovunque la si guardasse — l'interfaccia
+dichiarava 72 KB per una cartella che ne occupava quasi 5 MB.
+
+Rimozione via `trap … EXIT` in `app/worker.sh`, quindi valida anche sui
+fallimenti. Aggiunta una validazione difensiva dello `short` in testa allo
+script: oggi arriva sempre da `safe_short()`, ma finisce dentro un `rm -rf` e
+un punto d'ingresso futuro non deve potervi infilare un percorso relativo.
+
+### Il limite di worker simultanei non è più aggirabile
+
+`save.php`, `resnap.php` ed `enqueue_capture()` contavano i worker attivi e poi
+ne avviavano uno **senza lock**: due richieste contemporanee leggevano lo stesso
+conteggio e partivano entrambe. Solo `drain.php` prendeva il `flock`.
+
+Conteggio, presa in carico e avvio avvengono ora dentro quel lock, con una
+struttura a due livelli: `spawn_worker_locked()` presuppone il lock (usata da
+`drain.php`, che lo tiene per tutto il giro) e `with_queue_lock()` lo acquisisce
+(usata dai punti d'ingresso web). La distinzione è necessaria: una funzione che
+riacquisisse il lock si bloccherebbe da sé su un secondo descrittore.
+
+Il lock non è bloccante — dieci tentativi da 50 ms, poi rinuncia e lascia lo
+snapshot in coda: appendere una richiesta web sarebbe peggio del problema, e
+`drain.php` lo raccoglie comunque al giro successivo.
+
+Verificato iniettando un ritardo identico di 40 ms fra conteggio e avvio in
+entrambe le versioni: la precedente lanciava 8 worker contro un limite di 2, la
+corretta si ferma a 2.
+
+### Un solo punto di avvio del worker
+
+Erano quattro copie della stessa logica, con la stringa del `PATH` ripetuta ogni
+volta — ed è precisamente ciò che aveva permesso al difetto del `PATH` di
+ripresentarsi in `ots-upgrade.sh`. Ora una sola implementazione e una sola
+costante `WORKER_PATH`.
+
 ## 2026-09-15 (2) — Audit fase 2: osservabilità di backup e log
 
 ### Il backup non fallisce più in silenzio

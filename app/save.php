@@ -24,10 +24,8 @@ if (!$ok) {
     exit;
 }
 
-$short = safe_short(7);
 $pdo = db();
-$pdo->prepare('INSERT INTO snapshots(short, url, title, status) VALUES(?,?,?,?)')
-    ->execute([$short, $url, ($title !== '' ? $title : null), 'pending']);
+[$short, $started] = enqueue_capture($url, $title);
 
 if ($watch) {
     $ex = $pdo->prepare('SELECT id FROM watches WHERE url=?');
@@ -42,27 +40,9 @@ if ($watch) {
     }
 }
 
-// Avvia subito solo se siamo sotto la soglia di concorrenza; altrimenti resta "pending"
-$running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running'")
-    ->fetch()['c'];
-if ($running < MAX_CONCURRENCY) {
-    spawn_worker($short, $url);
-    $_SESSION['flash'] = "Archiviazione avviata ($short).";
-} else {
-    $_SESSION['flash'] = "In coda ($short): worker occupati, partirà a breve.";
-}
+$_SESSION['flash'] = $started
+    ? "Archiviazione avviata ($short)."
+    : "In coda ($short): worker occupati, partirà a breve.";
 
 audit("SAVE ok ip=" . client_ip() . " short=$short host=$host watch=" . ($watch ? '1' : '0'));
 header('Location: /snapper/index.php');
-
-/* ------------------------------------------------------------------ */
-function spawn_worker(string $short, string $url): void
-{
-    db()->prepare("UPDATE snapshots SET status='running' WHERE short=? AND status='pending'")
-        ->execute([$short]);
-    $cmd = 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin nohup '
-        . escapeshellarg(WORKER) . ' '
-        . escapeshellarg($short) . ' ' . escapeshellarg($url)
-        . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';
-    shell_exec($cmd);
-}

@@ -33,22 +33,10 @@ if (!$ok) {
 }
 
 $parent = $row['parent_short'] ?: $short;   // capostipite della catena di versioni
-$new = safe_short(7);
-$pdo->prepare('INSERT INTO snapshots(short, url, title, status, parent_short)
-               VALUES(?,?,?,?,?)')
-    ->execute([$new, $row['url'], $row['title'], 'pending', $parent]);
-
-$running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running'")->fetch()['c'];
-if ($running < MAX_CONCURRENCY) {
-    $pdo->prepare("UPDATE snapshots SET status='running' WHERE short=?")->execute([$new]);
-    $cmd = 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin nohup '
-        . escapeshellarg(WORKER) . ' ' . escapeshellarg($new) . ' ' . escapeshellarg((string)$row['url'])
-        . ' >> ' . escapeshellarg(DATA_DIR . '/worker.log') . ' 2>&1 &';
-    shell_exec($cmd);
-    $_SESSION['flash'] = "Nuova versione in sviluppo ($new).";
-} else {
-    $_SESSION['flash'] = "Nuova versione in coda ($new).";
-}
+[$new, $started] = enqueue_capture((string)$row['url'], $row['title'], $parent);
+$_SESSION['flash'] = $started
+    ? "Nuova versione in sviluppo ($new)."
+    : "Nuova versione in coda ($new).";
 
 audit("RESNAP ip=" . client_ip() . " from=$short new=$new");
 header('Location: /snapper/index.php');
