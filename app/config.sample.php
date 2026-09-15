@@ -142,12 +142,12 @@ function safe_short(int $len = 7): string
  * Verifica che un percorso stia davvero dentro DATA_DIR e ne restituisce la
  * forma canonica (false se è fuori o non esiste).
  *
- * Canonicalizza ENTRAMBI i lati: DATA_DIR può essere un symlink — qui
- * /srv/snapshots punta a /data/srv/snapshots — e confrontare realpath() del
- * file con la costante grezza non combacia mai. Un confronto sbagliato in un
- * controllo di sicurezza è peggio dell'assenza del controllo, perché fallisce
- * in silenzio: è esattamente così che l'indice full-text è rimasto vuoto e che
- * la cancellazione su disco veniva saltata.
+ * Canonicalizza ENTRAMBI i lati. DATA_DIR può benissimo essere un symlink (è
+ * frequente: la cartella dati vive su un volume diverso), e in quel caso
+ * confrontare realpath() del file con la costante grezza non combacia mai.
+ * Un confronto sbagliato in un controllo di sicurezza è peggio dell'assenza
+ * del controllo, perché fallisce in silenzio: è esattamente così che l'indice
+ * full-text è rimasto vuoto e che la cancellazione su disco veniva saltata.
  */
 function path_within_data(string $path): string|false
 {
