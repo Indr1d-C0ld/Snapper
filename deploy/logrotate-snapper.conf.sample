@@ -1,0 +1,39 @@
+# /etc/logrotate.d/snapper — rotazione dei log di Snapper.
+# Installato da deploy.sh. Verifica a vuoto:  sudo logrotate -d /etc/logrotate.d/snapper
+#
+# I log vivono in /srv/snapshots, di proprieta' di www-data: da qui la direttiva
+# "su", richiesta da logrotate quando la cartella non appartiene a root.
+#
+# worker.log e' quello che cresce davvero: raccoglie l'intero stderr di Chromium,
+# molto verboso, per ogni cattura. Da qui "maxsize": non aspetta la settimana se
+# nel frattempo ha superato la soglia.
+
+/srv/snapshots/worker.log
+/srv/snapshots/cron.log
+/srv/snapshots/backup.log
+/srv/snapshots/ots-upgrade.log
+{
+    su www-data www-data
+    weekly
+    maxsize 20M
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 www-data www-data
+}
+
+# auth.log a parte: e' il registro degli accessi, va conservato piu' a lungo
+# e non va troncato a caldo (nessun processo lo tiene aperto di continuo).
+/srv/snapshots/auth.log {
+    su www-data www-data
+    monthly
+    rotate 24
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 www-data www-data
+}

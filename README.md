@@ -76,6 +76,7 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `deploy/apache-archives.conf.sample` | sandbox degli archivi + stop all'esecuzione di codice |
 | `deploy/auth.php.sample` | modello per `/etc/snapper/auth.php` |
 | `deploy/install-ots.sh` | installa il comando `ots` in un venv di sistema (vedi sotto) |
+| `deploy/logrotate-snapper.conf.sample` | rotazione dei log (`worker.log` cresce in fretta) |
 
 ## Schema dati (SQLite)
 
@@ -122,7 +123,12 @@ sudo a2enmod headers && sudo a2enconf snapper-archives && sudo systemctl reload 
 # 5. Permessi
 sudo bash /var/www/html/snapper/snapper-perms.sh --fix
 
-# 6. (Opzionale) cron per coda + watch + backup, come utente www-data
+# 6. Rotazione dei log (worker.log raccoglie tutto lo stderr di Chromium:
+#    senza rotazione cresce senza limite)
+sudo cp deploy/logrotate-snapper.conf.sample /etc/logrotate.d/snapper
+sudo logrotate -d /etc/logrotate.d/snapper     # verifica a vuoto
+
+# 7. (Opzionale) cron per coda + watch + backup, come utente www-data
 #    */5 * * * * /var/www/html/snapper/cron-snapper.sh >> /srv/snapshots/cron.log 2>&1
 #    17 3  * * * /var/www/html/snapper/backup.sh        >> /srv/snapshots/backup.log 2>&1
 ```

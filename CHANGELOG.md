@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-09-15 (2) — Audit fase 2: osservabilità di backup e log
+
+### Il backup non fallisce più in silenzio
+
+`backup.sh` moriva con codice 2 sull'ultimo pattern di rotazione: `ls` su un
+glob senza corrispondenze falliva, `2>/dev/null` ne nascondeva il messaggio e
+`pipefail` + `set -e` interrompevano lo script **prima della riga di conferma
+finale**. I backup venivano comunque creati, ma il log restava vuoto — e un log
+vuoto è indistinguibile da «non è mai partito».
+
+- Rotazione riscritta con `mapfile < <(ls … || true)`: un pattern vuoto produce
+  zero file invece di abortire lo script.
+- **Trap `ERR`**: ogni fallimento futuro scrive `BACKUP FALLITO alla riga N` ed
+  esce con codice ≠ 0, così `cron` segnala l'anomalia.
+- Riepilogo finale con numero di dump, archivi codice e spazio occupato.
+- Corretto anche `--with-archives`, che includeva nel tar la cartella dei backup
+  — cioè se stesso — dato che `backups/` risiede sotto la cartella dati. Escluse
+  ora anche `.home`, `.ots-cache`, `ratelimit` e i sidecar SQLite.
+
+### Rotazione dei log
+
+Nuovo `deploy/logrotate-snapper.conf.sample`. `worker.log` raccoglie l'intero
+stderr di Chromium a ogni cattura: senza rotazione cresce senza limite. Due
+regimi distinti: `worker`/`cron`/`backup`/`ots-upgrade` settimanali con
+`maxsize 20M` e 8 rotazioni; `auth.log` mensile con 24 rotazioni e senza
+troncamento, essendo il registro degli accessi.
+
 ## 2026-09-15 — Audit: validazione delle catture, PATH dei cron, chiusura di migrate.php
 
 Esito della prima fase correttiva di un audit completo della piattaforma. I tre
