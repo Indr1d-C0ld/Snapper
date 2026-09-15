@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-09-16 — Confronti di percorso: una correzione della fase 4 era sbagliata
+
+La prima cattura reale in produzione dopo l'audit ha rivelato che il
+confinamento di `body_file` introdotto nella fase precedente **rompeva la
+ricerca full-text**, e che lo stesso errore era presente da più tempo in
+`delete.php`.
+
+### La causa
+
+`DATA_DIR` può essere un **symlink** (nel deployment di riferimento
+`/srv/snapshots` punta altrove). Entrambi i controlli confrontavano
+`realpath()` del percorso — che il symlink lo risolve — con la costante
+`DATA_DIR` grezza, che non lo risolve. I due valori non coincidono **mai**:
+
+- `worker-db.php` scartava il corpo del testo a ogni cattura: l'indice
+  full-text veniva popolato con titolo e URL ma **corpo vuoto**, e la ricerca
+  non trovava nulla. Regressione introdotta nella fase 4.
+- `delete.php` saltava `rrmdir()`, cancellando comunque le righe dal database:
+  ogni eliminazione avrebbe lasciato **una cartella orfana invisibile**. Errore
+  presente fin dal rework iniziale.
+
+In entrambi i casi il controllo falliva **in silenzio**, che è la ragione per
+cui è passato inosservato: una guardia che salta senza segnalare è peggio della
+sua assenza.
+
+### La correzione
+
+Nuovo `path_within_data()` in `app/config.php`: canonicalizza **entrambi** i
+lati e restituisce il percorso reale, oppure `false`. Usato da entrambi i punti
+di chiamata, che ora **falliscono in modo esplicito** invece di proseguire —
+`delete.php` annulla l'operazione senza toccare il database, `worker-db.php`
+segnala che l'indice resterebbe vuoto.
+
+Verificato riproducendo la condizione (symlink nel percorso dati): prima
+`false`, dopo il percorso corretto e leggibile; i tentativi di traversata
+(`../../etc/passwd`) restano respinti.
+
+### Riparazione dell'indice già danneggiato
+
+Nuovo `ops/reindex-fts.php` (solo da CLI, negato nella conf Apache): ricostruisce
+le righe dell'indice dai `text.txt` già presenti su disco, senza dover
+ri-catturare. In ricognizione per default, `--apply` per scrivere; tocca solo le
+righe con corpo vuoto e salta quelle prive di testo sul disco.
+
+```bash
+sudo -u www-data php /var/www/html/snapper/reindex-fts.php --apply
+```
+
 ## 2026-09-15 (4) — Audit fase 4: rifiniture di sicurezza e correttezza
 
 Ultima fase correttiva dell'audit. Chiude i rilievi minori rimasti.

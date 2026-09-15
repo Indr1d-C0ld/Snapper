@@ -77,6 +77,7 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `app/worker-db.php` | scritture DB del worker via prepared statement |
 | `app/drain.php` | avvio dei lavori in coda entro `MAX_CONCURRENCY` (`flock`) |
 | `app/migrate.php` | migrazione idempotente dello schema |
+| `app/reindex-fts.php` | ricostruisce l'indice full-text dai `text.txt` su disco |
 | `app/cron-snapper.sh` | coda + ri-catture programmate + recupero worker morti |
 | `app/backup.sh` | backup del DB (`.backup`) e del codice, con rotazione |
 | `app/ots-upgrade.sh` | completa le marche OpenTimestamps "in sospeso" (cron separato, bassa frequenza) |

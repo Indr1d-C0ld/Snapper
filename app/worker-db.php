@@ -46,11 +46,14 @@ switch ($op) {
         // resta una lettura di artefatti e non una lettura di file arbitrari.
         $body = '';
         if (!empty($in['body_file'])) {
-            $bf = realpath((string)$in['body_file']);
-            if ($bf !== false && str_starts_with($bf, DATA_DIR . '/') && is_file($bf)) {
+            $bf = path_within_data((string)$in['body_file']);
+            if ($bf !== false && is_file($bf)) {
                 $body = (string)file_get_contents($bf, false, null, 0, 5_242_880);
-            } elseif ($bf !== false) {
-                fwrite(STDERR, "body_file fuori da " . DATA_DIR . ", ignorato: $bf\n");
+            } else {
+                // Rumoroso: un indice vuoto è un guasto silenzioso della
+                // ricerca, non un dettaglio.
+                fwrite(STDERR, "ATTENZIONE: body_file non indicizzabile ("
+                    . $in['body_file'] . "): l'indice full-text resterà vuoto\n");
             }
         }
         // status_msg porta l'eventuale avviso di cattura (es. HTTP 4xx/5xx):

@@ -138,6 +138,27 @@ function safe_short(int $len = 7): string
     return $s;
 }
 
+/**
+ * Verifica che un percorso stia davvero dentro DATA_DIR e ne restituisce la
+ * forma canonica (false se è fuori o non esiste).
+ *
+ * Canonicalizza ENTRAMBI i lati: DATA_DIR può essere un symlink — qui
+ * /srv/snapshots punta a /data/srv/snapshots — e confrontare realpath() del
+ * file con la costante grezza non combacia mai. Un confronto sbagliato in un
+ * controllo di sicurezza è peggio dell'assenza del controllo, perché fallisce
+ * in silenzio: è esattamente così che l'indice full-text è rimasto vuoto e che
+ * la cancellazione su disco veniva saltata.
+ */
+function path_within_data(string $path): string|false
+{
+    static $base = null;
+    if ($base === null) {
+        $base = realpath(DATA_DIR) ?: DATA_DIR;
+    }
+    $real = realpath($path);
+    return ($real !== false && str_starts_with($real, $base . '/')) ? $real : false;
+}
+
 function client_ip(): string
 {
     // Apache serve direttamente: REMOTE_ADDR è affidabile.

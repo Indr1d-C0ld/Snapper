@@ -26,9 +26,19 @@ $arch = ARCH_DIR . '/' . $short;
 if (is_link($arch) || file_exists($arch)) {
     @unlink($arch);
 }
-if (is_dir($root) && str_starts_with(realpath($root) ?: '', DATA_DIR . '/')) {
-    rrmdir($root);
-    if (is_dir($root)) {
+if (is_dir($root)) {
+    // Se la guardia rifiuta il percorso NON proseguiamo in silenzio: saltare la
+    // rimozione e cancellare comunque le righe lascerebbe una cartella orfana
+    // invisibile — proprio il guasto che quest'ordine vuole evitare.
+    $safe = path_within_data($root);
+    if ($safe === false) {
+        audit("DELETE rifiutata ip=" . client_ip() . " short=$short (percorso fuori da " . DATA_DIR . ")");
+        $_SESSION['flash'] = "Eliminazione di $short annullata: percorso non riconosciuto. Nulla è stato modificato.";
+        header('Location: /snapper/index.php');
+        exit;
+    }
+    rrmdir($safe);
+    if (is_dir($safe)) {
         audit("DELETE fallita ip=" . client_ip() . " short=$short (rimozione su disco incompleta)");
         $_SESSION['flash'] = "Eliminazione di $short non riuscita: file ancora presenti su disco. Snapshot mantenuto in elenco.";
         header('Location: /snapper/index.php');
