@@ -59,8 +59,14 @@ host_is_private(){
   done < <(getent ahosts "$h" 2>/dev/null || true)
   return 1
 }
+host_resolves(){ getent ahosts "$1" >/dev/null 2>&1; }
 URL_HOST="$(host_of_url "$URL")"
-{ [ -z "$URL_HOST" ] || host_is_private "$URL_HOST"; } && fail "host non pubblico/non risolvibile: ${URL_HOST:-?}"
+[ -z "$URL_HOST" ] && fail "URL senza host riconoscibile"
+# La risolvibilita' va verificata davvero: senza questo controllo un dominio
+# inesistente supera la guardia e piu' avanti finiamo per archiviare (e
+# marcare temporalmente) la pagina d'errore del browser.
+host_resolves "$URL_HOST" || fail "host non risolvibile: $URL_HOST"
+host_is_private "$URL_HOST" && fail "host non pubblico: $URL_HOST"
 
 umask 022
 mkdir -p "$ROOT/site" "$ROOT/.home/.cache" "$ROOT/.home/.config" "$ARCH" \
@@ -68,7 +74,7 @@ mkdir -p "$ROOT/site" "$ROOT/.home/.cache" "$ROOT/.home/.config" "$ARCH" \
 log "START $SHORT :: $URL"
 
 # ---- 0) preflight HTTP: stato, url finale, content-type ------------------
-HTTP_CODE=""; FINAL_URL=""; CTYPE=""
+HTTP_CODE=""; FINAL_URL=""; CTYPE=""; CAP_WARN=""
 if [ -n "$CURL" ]; then
   META="$("$CURL" -sS -A "$UA" -L --max-redirs 5 --connect-timeout 15 --max-time 40 \
         -o /dev/null -w '%{http_code}\t%{url_effective}\t%{content_type}' "$URL" 2>>"$LOG" || true)"
@@ -81,6 +87,19 @@ if [ -n "$CURL" ]; then
   "$PHP" -r 'echo json_encode(["final_url"=>$argv[1]?:null,"http_status"=>$argv[2]?:null,"content_type"=>$argv[3]?:null]);' \
       "$FINAL_URL" "$HTTP_CODE" "$CTYPE" | "$PHP" "$DBHELP" meta "$SHORT" || true
   log "HTTP $SHORT :: ${HTTP_CODE:-?} ${FINAL_URL:-$URL} ${CTYPE:-?}"
+
+  # Nessuna connessione stabilita (DNS/TCP/TLS falliti): ogni artefatto
+  # prodotto da qui in avanti sarebbe la schermata d'errore del browser.
+  # Ci fermiamo subito, prima di sprecare wget + due avvii di Chromium.
+  case "${HTTP_CODE:-000}" in
+    000|0|"") fail "nessuna risposta dal server (connessione o TLS falliti)" ;;
+  esac
+  if [ "$HTTP_CODE" -ge 400 ] 2>/dev/null; then
+    # Una 404/410 e' una prova legittima da archiviare ("a quella data non
+    # c'era piu'"), ma va etichettata: resta 'ready' con avviso visibile.
+    CAP_WARN="il server ha risposto HTTP ${HTTP_CODE}: la copia potrebbe essere una pagina di errore"
+    log "WARN $SHORT :: $CAP_WARN"
+  fi
 fi
 
 # ---- 1) mirror statico (wget) ------------------------------------------
@@ -178,6 +197,16 @@ if command -v tesseract >/dev/null 2>&1 && [ -s "$ROOT/shot.png" ]; then
     log "OCR di fallback applicato"
   fi
 fi
+
+# ---- 7b) validazione finale degli artefatti ----------------------
+# Rete di sicurezza indipendente dal codice HTTP (es. curl assente): sta QUI,
+# prima di hash, marca temporale e ZIP, perche' una cattura non valida non
+# deve mai ricevere una marca OpenTimestamps.
+CAP_OK=0
+[ -s "$ROOT/shot.png" ] && CAP_OK=$((CAP_OK + 1))
+[ -s "$ROOT/text.txt" ] && [ "$(wc -c < "$ROOT/text.txt")" -ge 32 ] && CAP_OK=$((CAP_OK + 1))
+[ -n "$ENTRY" ] && [ -s "$ENTRY" ] && CAP_OK=$((CAP_OK + 1))
+[ "$CAP_OK" -eq 0 ] && fail "nessun artefatto utile prodotto (ne' screenshot, ne' testo, ne' copia statica)"
 
 # ---- 8) diff visivo con la versione precedente della stessa catena ----
 DIFF_PCT=""
@@ -311,7 +340,8 @@ END_TS=$(date +%s%3N); DUR=$((END_TS - START_TS))
   echo json_encode([
     "title"=>$argv[1],"size_bytes"=>(int)$argv[2],"sha256"=>$argv[3]?:null,
     "capture_ms"=>(int)$argv[4],"ots_status"=>$argv[5],"body_file"=>$argv[6],"diff_pct"=>$argv[7],
-  ]);' "$TITLE" "$SIZE" "$SHOT_SHA" "$DUR" "$OTS_STATUS" "$ROOT/text.txt" "$DIFF_PCT" \
+    "warn"=>$argv[8],
+  ]);' "$TITLE" "$SIZE" "$SHOT_SHA" "$DUR" "$OTS_STATUS" "$ROOT/text.txt" "$DIFF_PCT" "$CAP_WARN" \
   | "$PHP" "$DBHELP" ready "$SHORT"
 
 log "DONE  $SHORT :: ready (${DUR}ms, $(numfmt --to=iec "$SIZE" 2>/dev/null || echo "${SIZE}B"))"

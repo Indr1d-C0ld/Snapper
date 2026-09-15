@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-09-15 — Audit: validazione delle catture, PATH dei cron, chiusura di migrate.php
+
+Esito della prima fase correttiva di un audit completo della piattaforma. I tre
+rilievi più gravi; ciascuno verificato eseguendo il codice, non solo leggendolo.
+
+### Una cattura fallita non viene più archiviata come riuscita
+
+Era il difetto peggiore per un archiviatore di prove: archiviando un dominio
+irraggiungibile, il worker fotografava la **pagina d'errore del browser**, la
+salvava in PDF e HTML, ne calcolava gli hash e vi apponeva una **marca
+temporale OpenTimestamps**, registrando il tutto come `ready`. Nell'interfaccia
+era indistinguibile da una prova autentica. Il segnale per accorgersene
+(`http_status = 0`) era già in database ma non veniva mai letto.
+
+Tre barriere, in ordine di costo crescente (`app/worker.sh`):
+
+1. **Risolvibilità reale** dell'host (`getent ahosts`) nella guardia anti-SSRF.
+   Il messaggio d'errore prometteva già questo controllo senza effettuarlo.
+2. **Cancello HTTP** subito dopo il preflight: `http_code` `000` significa che
+   nessuna connessione è stata stabilita, quindi qualunque artefatto sarebbe la
+   schermata d'errore. Si interrompe lì, prima di sprecare `wget` e due avvii
+   di Chromium.
+3. **Rete di sicurezza sugli artefatti** prima di hash e marca temporale, per il
+   caso in cui `curl` non sia disponibile.
+
+Una risposta `4xx`/`5xx` resta **archiviabile** — «a quella data la pagina non
+c'era più» è una prova legittima — ma ora viene etichettata: lo snapshot resta
+`ready` con un avviso visibile in `status_msg` (`app/worker-db.php`, che prima
+azzerava sempre quel campo).
+
+Collaudato su quattro scenari reali: dominio inesistente e porta chiusa →
+`error` senza artefatti né marca; 404 reale → archiviato con avviso; pagina
+normale → invariata. I fallimenti costano ora 0,2 s e 15 s invece di ~90 s.
+
+### Gli script da cron non trovavano gli strumenti in `/usr/local/bin`
+
+`cron` esegue con `PATH=/usr/bin:/bin`. `ots-upgrade.sh` si affidava al PATH
+d'ambiente e quindi non trovava `ots` (installato in `/usr/local/bin`):
+registrava «ots non installato» a ogni giro, restando inerte. `PATH` esplicito
+ora in `ots-upgrade.sh`, `cron-snapper.sh` e `backup.sh`. Silenziato anche
+l'output di `ots upgrade`, che per una marca semplicemente in attesa stampa un
+fuorviante «Failed! Timestamp not complete».
+
+### `migrate.php` non è più raggiungibile dal web
+
+Era l'unico script di manutenzione privo sia della guardia `PHP_SAPI === 'cli'`
+sia di una voce nella deny-list Apache: rispondeva `200` da internet, eseguiva
+DDL sul database e rivelava il percorso assoluto. Aggiunte **entrambe** le
+barriere, indipendenti fra loro.
+
 ## 2026-09-11 (3) — Completamento automatico delle marche OpenTimestamps
 
 - **`app/ots-upgrade.sh`** (nuovo, deployato come `cron-snapper.sh`/`backup.sh`):

@@ -46,11 +46,14 @@ switch ($op) {
         if (!empty($in['body_file']) && is_file($in['body_file'])) {
             $body = (string)file_get_contents($in['body_file'], false, null, 0, 5_242_880);
         }
+        // status_msg porta l'eventuale avviso di cattura (es. HTTP 4xx/5xx):
+        // lo snapshot resta valido e consultabile, ma l'interfaccia lo segnala.
         $pdo->prepare(
-            'UPDATE snapshots SET status=\'ready\', status_msg=NULL,
+            'UPDATE snapshots SET status=\'ready\', status_msg=?,
              title=COALESCE(NULLIF(?,\'\'), title),
              size_bytes=?, sha256=?, capture_ms=?, ots_status=?, diff_pct=? WHERE short=?'
         )->execute([
+            (isset($in['warn']) && $in['warn'] !== '') ? mb_substr((string)$in['warn'], 0, 500) : null,
             $in['title']      ?? '',
             (int)($in['size_bytes'] ?? 0),
             $in['sha256']     ?? null,

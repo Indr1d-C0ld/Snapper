@@ -3,6 +3,10 @@
 # Esempio crontab (utente www-data):
 #   */5 * * * * /var/www/html/snapper/cron-snapper.sh >> /srv/snapshots/cron.log 2>&1
 set -Eeuo pipefail
+
+# cron esegue con PATH=/usr/bin:/bin: senza questa riga gli strumenti
+# installati in /usr/local/bin (es. ots) risultano "non installati".
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
 APPDIR="/var/www/html/snapper"
 PHP="$(command -v php || echo /usr/bin/php)"
 

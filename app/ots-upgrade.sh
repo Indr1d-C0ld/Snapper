@@ -19,6 +19,10 @@
 # =============================================================================
 set -Eeuo pipefail
 
+# cron esegue con PATH=/usr/bin:/bin: senza questa riga gli strumenti
+# installati in /usr/local/bin (es. ots) risultano "non installati".
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+
 APPDIR="/var/www/html/snapper"
 DATA="/srv/snapshots"
 CACHE="$DATA/.ots-cache"
@@ -55,7 +59,10 @@ while IFS= read -r SHORT; do
 
   # "upgrade" non tocca il file se non c'e' ancora conferma Bitcoin: e'
   # l'esito normale nella stragrande maggioranza dei run, non un errore.
-  "$OTS" --cache "$CACHE" upgrade "$F" || true
+  # Silenziamo l'output di ots (che in quel caso stampa un fuorviante
+  # "Failed! Timestamp not complete"): l'esito vero lo stabiliamo sotto,
+  # ispezionando il file con "ots info".
+  "$OTS" --cache "$CACHE" upgrade "$F" >/dev/null 2>&1 || true
 
   if "$OTS" --cache "$CACHE" info "$F" 2>/dev/null | grep -q BitcoinBlockHeaderAttestation; then
     "$PHP" -r '

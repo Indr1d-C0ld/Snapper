@@ -21,6 +21,10 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
   senza testo estraibile.
 - **Integrità**: `SHA256SUMS` di tutti gli artefatti e, se `ots` è installato,
   marca temporale OpenTimestamps.
+- **Validazione della cattura**: se il server non risponde affatto, la cattura
+  viene marcata `error` invece di archiviare (e marcare temporalmente) la
+  schermata d'errore del browser. Una risposta `4xx`/`5xx` resta archiviabile —
+  è una prova legittima — ma viene etichettata.
 - **Versioni & diff visivo**: «ri-cattura» crea una nuova versione concatenata;
   Snapper calcola la percentuale di pixel cambiati e produce un `diff.png`.
 - **Watch programmati**: osserva un URL e ri-catturalo ogni N ore (pagina di
@@ -76,9 +80,10 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 ## Schema dati (SQLite)
 
 - `snapshots` — una riga per cattura: `short` (id pubblico), `url`, `title`,
-  `ts`, `status` (`pending`/`running`/`ready`/`error`), `size_bytes`,
-  `final_url`, `http_status`, `content_type`, `sha256`, `capture_ms`,
-  `pinned`, `note`, `tags`, `parent_short` (catena di versioni),
+  `ts`, `status` (`pending`/`running`/`ready`/`error`), `status_msg` (motivo
+  dell'errore, oppure avviso su una cattura comunque valida — es. HTTP 404),
+  `size_bytes`, `final_url`, `http_status`, `content_type`, `sha256`,
+  `capture_ms`, `pinned`, `note`, `tags`, `parent_short` (catena di versioni),
   `ots_status`, `diff_pct`.
 - `snapshots_fts` — indice FTS5 (`title`, `url`, `body`).
 - `watches` — URL osservati: `url`, `title`, `every_hours`, `last_run`,

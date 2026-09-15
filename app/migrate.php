@@ -2,7 +2,16 @@
 declare(strict_types=1);
 
 /* Migrazione idempotente dello schema Snapper.
- * Uso:  sudo -u www-data php ops/migrate.php   (o via deploy.sh) */
+ * Uso:  sudo -u www-data php ops/migrate.php   (o via deploy.sh)
+ *
+ * SOLO da CLI: e' uno script di manutenzione che esegue DDL sul database di
+ * produzione e non ha alcun controllo di sessione. La conf Apache lo nega
+ * gia' via <FilesMatch>, questo e' la seconda barriera indipendente. */
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
 
 $dbPath = getenv('SNAPPER_DB') ?: '/srv/snapshots/snapper.db';
 $pdo = new PDO('sqlite:' . $dbPath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);

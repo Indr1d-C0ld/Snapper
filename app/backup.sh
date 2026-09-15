@@ -5,6 +5,10 @@
 #   17 3 * * *  /var/www/html/snapper/backup.sh >> /srv/snapshots/backup.log 2>&1
 set -Eeuo pipefail
 
+# cron esegue con PATH=/usr/bin:/bin: senza questa riga gli strumenti
+# installati in /usr/local/bin (es. ots) risultano "non installati".
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+
 APP="/var/www/html/snapper"
 DATA="/srv/snapshots"
 DB="$DATA/snapper.db"

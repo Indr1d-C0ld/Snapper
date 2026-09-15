@@ -35,9 +35,10 @@
     </IfModule>
 </Directory>
 
-# Blocca l'accesso web diretto agli include non-entrypoint dell'app
+# Blocca l'accesso web diretto agli include e agli script di manutenzione:
+# sono tutti eseguibili solo da CLI e non hanno controllo di sessione.
 <Directory /var/www/html/snapper>
-    <FilesMatch "^(config|lib|worker-db|drain)\.php$">
+    <FilesMatch "^(config|lib|worker-db|drain|migrate)\.php$">
         Require all denied
     </FilesMatch>
     <FilesMatch "\.(sh|db|log|sqlite)$">
