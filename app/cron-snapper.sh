@@ -30,8 +30,8 @@ foreach ($due as $w) {
     $r->execute([$w["last_short"]]);
     $parent = ($r->fetch()["p"] ?? null) ?: $w["last_short"];
   }
-  $pdo->prepare("INSERT INTO snapshots(short,url,title,status,parent_short) VALUES(?,?,?,?,?)")
-      ->execute([$new, $w["url"], $w["title"], "pending", $parent]);
+  $pdo->prepare("INSERT INTO snapshots(short,url,title,status,parent_short,source) VALUES(?,?,?,?,?,?)")
+      ->execute([$new, $w["url"], $w["title"], "pending", $parent, "watch"]);
   $pdo->prepare("UPDATE watches SET last_run=CURRENT_TIMESTAMP, last_short=? WHERE id=?")
       ->execute([$new, $w["id"]]);
   echo "watch {$w[id]} -> $new\n";
@@ -48,7 +48,7 @@ $pdo = db();
 $stale = $pdo->query("SELECT short FROM snapshots WHERE status=\"running\"
   AND strftime(\"%s\",\"now\") - strftime(\"%s\",ts) > 1800")->fetchAll();
 foreach ($stale as $s) {
-  $pdo->prepare("UPDATE snapshots SET status=\"error\", status_msg=\"worker interrotto (timeout)\" WHERE short=?")
+  $pdo->prepare("UPDATE snapshots SET status=\"error\", status_msg=\"worker interrotto (timeout)\", done_at=CURRENT_TIMESTAMP WHERE short=?")
       ->execute([$s["short"]]);
   echo "stale {$s[short]} -> error\n";
 }

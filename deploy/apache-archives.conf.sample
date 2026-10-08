@@ -38,10 +38,15 @@
 # Blocca l'accesso web diretto agli include e agli script di manutenzione:
 # sono tutti eseguibili solo da CLI e non hanno controllo di sessione.
 <Directory /var/www/html/snapper>
-    <FilesMatch "^(config|lib|worker-db|drain|migrate|reindex-fts)\.php$">
+    <FilesMatch "^(config|lib|worker-db|drain|migrate|reindex-fts|api-token)\.php$">
         Require all denied
     </FilesMatch>
     <FilesMatch "\.(sh|db|log|sqlite)$">
         Require all denied
     </FilesMatch>
+    # API per servizi (bot Telegram): solo dalla macchina stessa. api.php
+    # ripete il controllo per conto suo: le due barriere sono indipendenti.
+    <Files "api.php">
+        Require local
+    </Files>
 </Directory>

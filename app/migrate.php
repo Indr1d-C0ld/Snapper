@@ -38,6 +38,13 @@ $want = [
     'parent_short' => 'TEXT',
     'ots_status'   => "TEXT DEFAULT 'none'",
     'diff_pct'     => 'REAL',
+    // quando la cattura si è conclusa (ready o error): cursore degli eventi
+    // per il bot. Non si può usare l'id: non è AUTOINCREMENT e può essere
+    // riusato dopo una cancellazione.
+    'done_at'      => 'DATETIME',
+    // chi l'ha richiesta: 'web', 'watch', 'api:<nome token>'. Serve anche a
+    // misurare quante catture arrivano senza passare dall'interfaccia.
+    'source'       => "TEXT DEFAULT 'web'",
 ];
 foreach ($want as $name => $type) {
     if (!in_array($name, $have, true)) {
@@ -49,6 +56,22 @@ foreach ($want as $name => $type) {
 $pdo->exec("CREATE INDEX IF NOT EXISTS idx_status ON snapshots(status)");
 $pdo->exec("CREATE INDEX IF NOT EXISTS idx_parent ON snapshots(parent_short)");
 $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pinned ON snapshots(pinned)");
+$pdo->exec("CREATE INDEX IF NOT EXISTS idx_done ON snapshots(done_at)");
+
+/* Token dell'API: si salva solo l'impronta SHA-256, mai il token. Un token è
+ * 32 byte casuali, quindi un hash veloce basta: non c'è nulla da indovinare
+ * per forza bruta, a differenza di una password. */
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL UNIQUE,
+  token_hash  TEXT NOT NULL UNIQUE,
+  scopes      TEXT NOT NULL,              -- 'capture', 'read' o 'capture,read'
+  created     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_used   DATETIME,
+  uses        INTEGER DEFAULT 0,
+  revoked     DATETIME
+)");
 
 $pdo->exec("
 CREATE TABLE IF NOT EXISTS watches (

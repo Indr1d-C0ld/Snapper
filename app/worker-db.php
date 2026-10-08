@@ -59,7 +59,7 @@ switch ($op) {
         // status_msg porta l'eventuale avviso di cattura (es. HTTP 4xx/5xx):
         // lo snapshot resta valido e consultabile, ma l'interfaccia lo segnala.
         $pdo->prepare(
-            'UPDATE snapshots SET status=\'ready\', status_msg=?,
+            'UPDATE snapshots SET status=\'ready\', status_msg=?, done_at=CURRENT_TIMESTAMP,
              title=COALESCE(NULLIF(?,\'\'), title),
              size_bytes=?, sha256=?, capture_ms=?, ots_status=?, diff_pct=? WHERE short=?'
         )->execute([
@@ -83,7 +83,7 @@ switch ($op) {
         break;
 
     case 'error':
-        $pdo->prepare('UPDATE snapshots SET status=\'error\', status_msg=? WHERE short=?')
+        $pdo->prepare('UPDATE snapshots SET status=\'error\', status_msg=?, done_at=CURRENT_TIMESTAMP WHERE short=?')
             ->execute([mb_substr((string)($in['msg'] ?? 'errore'), 0, 500), $short]);
         break;
 

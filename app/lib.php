@@ -134,14 +134,15 @@ function with_queue_lock(callable $fn, callable $fallback)
  * MAX_CONCURRENCY; altrimenti resta in coda (lo raccoglie drain.php/cron).
  * @return array{0:string,1:bool}  [short, avviato_subito]
  */
-function enqueue_capture(string $url, ?string $title, ?string $parentShort = null): array
+function enqueue_capture(string $url, ?string $title, ?string $parentShort = null, string $source = 'web'): array
 {
     $pdo   = db();
     $short = safe_short(7);
     $title = ($title !== null && trim($title) !== '') ? trim($title) : null;
+    $source = mb_substr($source, 0, 64);
 
-    $pdo->prepare('INSERT INTO snapshots(short, url, title, status, parent_short) VALUES(?,?,?,?,?)')
-        ->execute([$short, $url, $title, 'pending', $parentShort]);
+    $pdo->prepare('INSERT INTO snapshots(short, url, title, status, parent_short, source) VALUES(?,?,?,?,?,?)')
+        ->execute([$short, $url, $title, 'pending', $parentShort, $source]);
 
     // Conteggio e avvio devono essere atomici fra i vari punti d'ingresso,
     // altrimenti due richieste simultanee leggono lo stesso conteggio e

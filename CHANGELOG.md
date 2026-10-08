@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-10-08 — API per servizi e bot Telegram dedicato
+
+Snapper funzionava bene ma si usava poco: archiviare richiedeva computer,
+login e interfaccia. Questo rilascio porta l'archiviazione dove si è già: un
+link inoltrato a un bot Telegram.
+
+### Nuovo
+
+- `app/api.php` — API JSON: `capture`, `watch`, `status`, `recent`, `search`
+  (estratti con i termini evidenziati, ordinamento bm25), `events` (catture
+  concluse dopo un cursore), `health`. Nessuna sessione né cookie.
+- `app/api-token.php` — gestione dei token da CLI: `create`, `list`,
+  `rotate`, `revoke`. Il token si vede una volta sola.
+- `bot/` — bot Telegram in Python con sola libreria standard: risposta
+  «in sviluppo» aggiornata con l'esito, `/cerca`, `/ultimi`, `/prova`,
+  `/osserva`, `/stato`; avvisi per pagine osservate che cambiano e per
+  ricatture fallite. Stato persistente: un riavvio non perde le catture in
+  attesa né rielabora i messaggi già letti.
+- `deploy/install-bot.sh` — installazione guidata: nessun segreto sulla riga
+  di comando, abbinamento della chat con `/start` (accettato anche se inviato
+  prima di lanciare lo script), collaudo dell'API, avvio del servizio.
+
+### Sicurezza
+
+- `api.php` solo da loopback, con due controlli indipendenti (Apache
+  `Require local` e PHP). `api-token.php` negato al web come gli altri
+  script di manutenzione.
+- Token: 32 byte casuali, nel DB solo SHA-256, ambiti per token, rifiutati in
+  query string (finirebbero nei log di accesso), tentativi falliti registrati
+  in `auth.log` e rallentati.
+- Unità systemd: `DynamicUser`, `ProtectSystem=strict`, nessuna capability,
+  filtro delle chiamate di sistema (`systemd-analyze security`: 1.2).
+
+### Schema (migrazione additiva)
+
+- `snapshots.done_at`: quando la cattura si è conclusa. Lo impostano tutti e
+  tre i punti che chiudono una cattura (worker ok, worker errore, recupero dei
+  worker morti nel cron). Serve da cursore degli eventi: l'`id` non è
+  `AUTOINCREMENT` e può essere riusato dopo una cancellazione.
+- `snapshots.source`: `web`, `watch` o `api:<nome token>`. Dice da dove
+  arrivano le catture: è la misura per capire se il bot ha cambiato l'uso.
+- Tabella `api_tokens`.
+
+### Dettagli
+
+- `enqueue_capture()` accetta l'origine della cattura.
+- Via API, rimettere in osservazione un URL già osservato aggancia la nuova
+  cattura alla catena di versioni esistente, così viene confrontata con la
+  precedente.
+
 ## 2026-09-16 — Confronti di percorso: una correzione della fase 4 era sbagliata
 
 La prima cattura reale in produzione dopo l'audit ha rivelato che il

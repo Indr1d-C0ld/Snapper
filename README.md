@@ -3,7 +3,8 @@
 Archiviatore web personale self-hosted. Dato un URL, ne conserva una copia
 completa e datata — mirror statico, pagina in un solo file, screenshot a piena
 pagina, PDF, testo, bundle ZIP — con ricerca full-text sull'intero archivio e
-un'interfaccia a *provino fotografico* (contact sheet).
+un'interfaccia a *provino fotografico* (contact sheet). Un bot Telegram
+facoltativo permette di archiviare inoltrando un link dal telefono.
 
 Stack: **PHP 8.1+** e **SQLite** (FTS5) per la webapp, **bash** per il worker di
 cattura. Nessun framework, nessun database server, nessuna build. Dipende solo
@@ -82,6 +83,12 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `app/backup.sh` | backup del DB (`.backup`) e del codice, con rotazione |
 | `app/ots-upgrade.sh` | completa le marche OpenTimestamps "in sospeso" (cron separato, bassa frequenza) |
 | `app/snapper-perms.sh` | verifica/ripristino di permessi e ownership |
+| `app/api.php` | API JSON per servizi: solo da loopback, token Bearer con ambiti |
+| `app/api-token.php` | crea / elenca / ruota / revoca i token dell'API (solo CLI) |
+| `bot/snapper_bot.py` | bot Telegram dedicato (solo libreria standard Python) |
+| `bot/snapper-bot.service` | unità systemd con utente effimero e sandbox stretta |
+| `bot/bot.env.sample` | modello di `/etc/snapper/bot.env` |
+| `deploy/install-bot.sh` | installa il bot: token, abbinamento della chat con `/start`, avvio |
 | `app/assets/snapper.css` | tema «Camera Oscura / Provino» (nessun asset esterno) |
 | `deploy/apache-archives.conf.sample` | sandbox degli archivi + stop all'esecuzione di codice |
 | `deploy/auth.php.sample` | modello per `/etc/snapper/auth.php` |
@@ -95,10 +102,13 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
   dell'errore, oppure avviso su una cattura comunque valida — es. HTTP 404),
   `size_bytes`, `final_url`, `http_status`, `content_type`, `sha256`,
   `capture_ms`, `pinned`, `note`, `tags`, `parent_short` (catena di versioni),
-  `ots_status`, `diff_pct`.
+  `ots_status`, `diff_pct`, `done_at` (conclusione della cattura: cursore
+  degli eventi), `source` (`web`, `watch`, `api:<nome token>`).
 - `snapshots_fts` — indice FTS5 (`title`, `url`, `body`).
 - `watches` — URL osservati: `url`, `title`, `every_hours`, `last_run`,
   `last_short`, `enabled`.
+- `api_tokens` — token dell'API: solo l'impronta SHA-256, `scopes`,
+  `last_used`, `uses`, `revoked`.
 
 Gli artefatti di ogni cattura stanno in `<DATA_DIR>/<short>/` e sono esposti
 pubblicamente come `/archives/<short>/` tramite un symlink.
@@ -146,6 +156,51 @@ sudo logrotate -d /etc/logrotate.d/snapper     # verifica a vuoto
 L'app presuppone di essere servita sotto `/snapper/` con gli archivi sotto
 `/archives/` sullo stesso host (rivedi i percorsi in `config.php` e i redirect
 in-app se cambi prefisso).
+
+## API e bot Telegram (opzionale)
+
+Per archiviare senza aprire l'interfaccia web: inoltri un link al bot, il
+messaggio «⏳ In sviluppo» diventa l'esito della cattura (titolo, HTTP,
+SHA-256, stato OpenTimestamps, collegamento alla prova). Il bot avvisa anche
+quando una pagina osservata cambia oltre una soglia (`DIFF_THRESHOLD`, default
+1%) e quando una ricattura programmata fallisce. Comandi: `/cerca`, `/ultimi`,
+`/prova`, `/osserva`, `/stato`, `/aiuto`.
+
+```bash
+# api.php e api-token.php sono già in app/; la conf Apache del passo 4 limita
+# api.php al loopback. Poi crea un bot NUOVO con @BotFather e:
+sudo bash deploy/install-bot.sh
+```
+
+Lo script chiede il token del bot senza mostrarlo, abbina la tua chat quando
+scrivi `/start`, crea il token dell'API, lo collauda, scrive
+`/etc/snapper/bot.env` (root, 600) e avvia il servizio.
+
+**Sicurezza.** `api.php` risponde solo da `127.0.0.1`/`::1`, controllato due
+volte: `Require local` in Apache e di nuovo in PHP (dall'esterno: 404). Se
+davanti ad Apache c'è un reverse proxy *sulla stessa macchina*, le richieste
+esterne arrivano da loopback: in quel caso questa barriera non vale e va
+rivista. Token di 32 byte casuali, nel DB solo l'impronta; accettati solo
+nell'header `Authorization: Bearer` (in query string: 400). Ambiti `capture` /
+`read` per token, stessa validazione anti-SSRF dell'interfaccia, massimo 60
+catture/ora per token. Il bot risponde solo alle chat abbinate e gira con un
+utente systemd effimero senza accesso ai dati.
+
+| Azione | Metodo | Ambito | |
+|---|---|---|---|
+| `?a=capture` | POST `{url, title?}` | capture | archivia (stesso URL entro 10 min: restituisce la prova esistente) |
+| `?a=watch` | POST `{url, every_hours, title?}` | capture | osserva e ricattura periodicamente |
+| `?a=status&short=` | GET | read | stato di una prova |
+| `?a=recent&limit=` | GET | read | ultime prove |
+| `?a=search&q=` | GET | read | ricerca full-text con estratti, ordinata per pertinenza |
+| `?a=events&since=` | GET | read | catture concluse dopo il cursore `done_at\|short` |
+| `?a=health` | GET | read | coda, archivio, OTS, ultimo backup, disco, catture per origine |
+
+```bash
+sudo -u www-data php /var/www/html/snapper/api-token.php list
+sudo -u www-data php /var/www/html/snapper/api-token.php create integrazione --scopes=read
+sudo -u www-data php /var/www/html/snapper/api-token.php revoke telegram-bot
+```
 
 ## Strumenti opzionali
 
