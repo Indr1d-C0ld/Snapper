@@ -17,12 +17,21 @@ if (!preg_match('/^[A-Za-z0-9]{5,12}$/', $short)) {
 }
 
 $pdo = db();
-$src = $pdo->prepare('SELECT url, title, parent_short FROM snapshots WHERE short=?');
+$src = $pdo->prepare('SELECT url, title, parent_short, kind FROM snapshots WHERE short=?');
 $src->execute([$short]);
 $row = $src->fetch();
 if (!$row) {
     http_response_code(404);
     exit('snapshot inesistente');
+}
+
+if (($row['kind'] ?? 'page') === 'wiki') {
+    $w = $pdo->prepare('SELECT wiki_page FROM wiki_jobs WHERE short=?');
+    $w->execute([$short]);
+    $wp = (int)($w->fetch()['wiki_page'] ?? 0);
+    $_SESSION['flash'] = 'Le prove di Wikipedia non si ri-catturano: le nuove revisioni si acquisiscono dal dossier della voce.';
+    header('Location: /snapper/wiki.php' . ($wp ? "?page=$wp" : ''));
+    exit;
 }
 
 [$ok, $reason, $host] = validate_public_url((string)$row['url']);

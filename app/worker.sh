@@ -82,6 +82,17 @@ URL_HOST="$(host_of_url "$URL")"
 host_resolves "$URL_HOST" || fail "host non risolvibile: $URL_HOST"
 host_is_private "$URL_HOST" && fail "host non pubblico: $URL_HOST"
 
+# ---- prove di tipo Wikipedia: le esegue wiki-worker.php ------------------
+# Il tipo si legge dal database, non dall'URL: un link a Wikipedia salvato
+# dal modulo normale resta una cattura di pagina come le altre.
+KIND="$(printf '{}' | "$PHP" "$DBHELP" get "$SHORT" 2>/dev/null \
+  | "$PHP" -r '$j=json_decode(stream_get_contents(STDIN),true);echo $j["kind"]??"";' || true)"
+if [ "$KIND" = "wiki" ]; then
+  trap - ERR EXIT
+  log "START $SHORT :: Wikipedia ($URL)"
+  exec "$PHP" "$APPDIR/wiki-worker.php" "$SHORT"
+fi
+
 umask 022
 mkdir -p "$ROOT/site" "$ROOT/.home/.cache" "$ROOT/.home/.config" "$ARCH" \
   || fail "impossibile creare $ROOT o $ARCH"
@@ -305,11 +316,9 @@ DIFF_CHIP=""
 [ -s "$ROOT/diff.png" ] && DIFF_CHIP='<a href="diff.png">Diff visivo'"${DIFF_PCT:+ (${DIFF_PCT}%)}"'</a>'
 SF_CHIP=""
 [ -s "$ROOT/page.singlefile.html" ] && SF_CHIP='<a href="page.singlefile.html">Pagina (1 file)</a>'
-cat > "$ROOT/index.html" <<HTML
-<!doctype html><html lang="it"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Prova ${SHORT} — ${T_H}</title>
-<style>
+# La CSP degli archivi (default-src 'self') non ammette stili inline: lo
+# stile della scheda sta in un file accanto, altrimenti la pagina resta nuda.
+cat > "$ROOT/index.css" <<'CSS'
  :root{--paper:#f2ecdd;--ink:#1c1a15;--muted:#6f6857;--line:#c8bd9f;--red:#c8402f}
  *{box-sizing:border-box}body{margin:0;background:#17150f;color:var(--paper);
    font:15px/1.55 ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif;padding:2rem clamp(1rem,4vw,3rem)}
@@ -326,11 +335,19 @@ cat > "$ROOT/index.html" <<HTML
    font:600 12px/1 ui-sans-serif;text-transform:uppercase;letter-spacing:.06em}
  .chips a:hover{background:#e6dbc2}
  a{color:#7a5a12}
-</style></head><body>
+ .back{margin-top:1.4rem}
+ .tabk .code{text-transform:none;letter-spacing:.04em}
+CSS
+cat > "$ROOT/index.html" <<HTML
+<!doctype html><html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Prova ${SHORT} — ${T_H}</title>
+<link rel="stylesheet" href="index.css">
+</head><body>
 <div class="card">
- <div class="tabk">Snapper &middot; prova ${SHORT}</div>
+ <div class="tabk">Snapper &middot; prova <span class="code">${SHORT}</span></div>
  <h1>${T_H}</h1>
- <img class="shot" src="shot.png" alt="Screenshot" onerror="this.style.display='none'">
+ <img class="shot" src="shot.png" alt="Screenshot">
  <dl>
   <dt>Origine</dt><dd><a href="${U_H}" rel="noopener noreferrer">${U_H}</a></dd>
   <dt>URL finale</dt><dd>${FU_H}</dd>
@@ -349,7 +366,7 @@ cat > "$ROOT/index.html" <<HTML
   <a href="SHA256SUMS">SHA256SUMS</a>
   ${DIFF_CHIP}
  </div>
- <p style="margin-top:1.4rem"><a href="../">&larr; Indice archivio</a></p>
+ <p class="back"><a href="../">&larr; Indice archivio</a></p>
 </div></body></html>
 HTML
 

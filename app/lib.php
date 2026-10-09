@@ -318,6 +318,7 @@ function layout_masthead(string $active = ''): void
         '<a class="tab' . ($active === $key ? ' tab-on' : '') . '" href="' . $href . '">' . $label . '</a>';
     $nav = $tab('sheet', '/snapper/index.php', 'Provino')
          . $tab('watch', '/snapper/watches.php', 'Watch')
+         . $tab('wiki', '/snapper/wiki.php', 'Wikipedia')
          . '<a class="tab" href="/snapper/logout.php">Esci</a>';
     echo <<<HTML
 <header class="masthead">

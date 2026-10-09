@@ -52,6 +52,12 @@ $pdo->prepare('DELETE FROM snapshots WHERE short=?')->execute([$short]);
 $pdo->prepare('DELETE FROM snapshots_fts WHERE short=?')->execute([$short]);
 // il watch resta: si gestisce da watches.php. Sgancia solo il riferimento.
 $pdo->prepare('UPDATE watches SET last_short=NULL WHERE last_short=?')->execute([$short]);
+// Wikipedia: le revisioni archiviate in questa prova escono dal dossier; una
+// voce senza più revisioni né acquisizioni in corso sparisce dall'elenco.
+$pdo->prepare('DELETE FROM wiki_revisions WHERE short=?')->execute([$short]);
+$pdo->prepare('DELETE FROM wiki_jobs WHERE short=?')->execute([$short]);
+$pdo->exec('DELETE FROM wiki_pages WHERE id NOT IN (SELECT wiki_page FROM wiki_revisions)
+                                    AND id NOT IN (SELECT wiki_page FROM wiki_jobs)');
 $pdo->commit();
 
 audit("DELETE ip=" . client_ip() . " short=$short");

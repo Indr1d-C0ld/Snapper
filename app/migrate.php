@@ -45,6 +45,9 @@ $want = [
     // chi l'ha richiesta: 'web', 'watch', 'api:<nome token>'. Serve anche a
     // misurare quante catture arrivano senza passare dall'interfaccia.
     'source'       => "TEXT DEFAULT 'web'",
+    // tipo di prova: 'page' (cattura di una pagina) o 'wiki' (revisioni di
+    // una voce di Wikipedia, eseguita da wiki-worker.php)
+    'kind'         => "TEXT DEFAULT 'page'",
 ];
 foreach ($want as $name => $type) {
     if (!in_array($name, $have, true)) {
@@ -71,6 +74,49 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   last_used   DATETIME,
   uses        INTEGER DEFAULT 0,
   revoked     DATETIME
+)");
+
+/* Wikipedia. Una voce (wiki_pages) raccoglie nel tempo le revisioni
+ * archiviate (wiki_revisions), ciascuna dentro la prova che l'ha acquisita:
+ * le prove restano immutabili, così ogni marcatura temporale resta valida.
+ * wiki_jobs ricorda quali revisioni una prova in coda deve scaricare. */
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS wiki_pages (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  lang     TEXT NOT NULL,
+  pageid   INTEGER NOT NULL,
+  title    TEXT NOT NULL,
+  created  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(lang, pageid)
+)");
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS wiki_revisions (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  wiki_page        INTEGER NOT NULL,
+  revid            INTEGER NOT NULL,
+  parentid         INTEGER,
+  ts               DATETIME NOT NULL,       -- data della revisione su Wikipedia (UTC)
+  user             TEXT,
+  anon             INTEGER DEFAULT 0,
+  comment          TEXT,
+  size             INTEGER,
+  sha1             TEXT,                    -- impronta pubblicata da Wikipedia
+  sha1_ok          INTEGER,                 -- 1 = coincide con il wikitesto archiviato
+  sha256_wikitext  TEXT,
+  minor            INTEGER DEFAULT 0,
+  tags             TEXT,                    -- JSON
+  short            TEXT NOT NULL,           -- prova che la contiene
+  UNIQUE(wiki_page, revid, short)
+)");
+$pdo->exec("CREATE INDEX IF NOT EXISTS idx_wrev_page ON wiki_revisions(wiki_page, ts)");
+$pdo->exec("CREATE INDEX IF NOT EXISTS idx_wrev_short ON wiki_revisions(short)");
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS wiki_jobs (
+  short      TEXT PRIMARY KEY,
+  wiki_page  INTEGER NOT NULL,
+  revids     TEXT NOT NULL,                 -- JSON
+  created    DATETIME DEFAULT CURRENT_TIMESTAMP
 )");
 
 $pdo->exec("

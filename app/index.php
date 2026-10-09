@@ -43,6 +43,18 @@ if ($q !== '') {
     $rows = $st->fetchAll();
 }
 
+// prove di tipo Wikipedia: niente screenshot/PDF, ma un dossier della voce
+$wikiOf = [];
+$wikiShorts = array_column(array_filter($rows, fn($r) => ($r['kind'] ?? 'page') === 'wiki'), 'short');
+if ($wikiShorts) {
+    $in = implode(',', array_fill(0, count($wikiShorts), '?'));
+    $w = $pdo->prepare("SELECT short, wiki_page FROM wiki_jobs WHERE short IN ($in)");
+    $w->execute($wikiShorts);
+    foreach ($w as $x) {
+        $wikiOf[(string)$x['short']] = (int)$x['wiki_page'];
+    }
+}
+
 $pages   = max(1, (int)ceil($total / $per));
 $startNo = $total - $off;                       // numero fotogramma del primo elemento
 $flash   = $_SESSION['flash'] ?? null;
@@ -125,7 +137,8 @@ layout_masthead('sheet');
       $st    = (string)($r['status'] ?? '');
       $dom   = host_of($r['url']);
       $pinned = !empty($r['pinned']);
-      $hasShot = $st === 'ready';
+      $isWiki = ($r['kind'] ?? 'page') === 'wiki';
+      $hasShot = $st === 'ready' && !$isWiki;
   ?>
     <figure class="frame <?= $pinned ? 'pinned' : '' ?>" data-text="<?= h($dom . ' ' . ($r['title'] ?? '') . ' ' . $r['url']) ?>">
       <span class="no">#<?= str_pad((string)$n, 3, '0', STR_PAD_LEFT) ?></span>
@@ -145,7 +158,7 @@ layout_masthead('sheet');
         <?php if ($hasShot): ?>
           <img loading="lazy" src="<?= $base ?>/shot.png" alt="Anteprima di <?= h($dom) ?>">
         <?php else: ?>
-          <span><?= $st === 'error' ? 'velato' : 'in sviluppo' ?></span>
+          <span><?= $st === 'error' ? 'velato' : ($isWiki && $st === 'ready' ? 'Wikipedia' : 'in sviluppo') ?></span>
         <?php endif; ?>
         <span class="st"><?= status_stamp($st) ?></span>
       </a>
@@ -167,6 +180,12 @@ layout_masthead('sheet');
       </figcaption>
 
       <div class="ops">
+        <?php if ($isWiki): ?>
+        <a href="<?= $base ?>/" target="_blank" rel="noopener">Indice</a>
+        <a href="<?= $base ?>/bundle.zip" target="_blank" rel="noopener">ZIP</a>
+        <?php if (isset($wikiOf[$short])): ?><a href="wiki.php?page=<?= $wikiOf[$short] ?>">Dossier</a><?php endif; ?>
+        <span class="spring"></span>
+        <?php else: ?>
         <a href="<?= $base ?>/shot.png" target="_blank" rel="noopener">PNG</a>
         <a href="<?= $base ?>/page.pdf" target="_blank" rel="noopener">PDF</a>
         <a href="<?= $base ?>/text.txt" target="_blank" rel="noopener">TXT</a>
@@ -177,6 +196,7 @@ layout_masthead('sheet');
           <input type="hidden" name="short" value="<?= h($short) ?>">
           <button type="submit" title="Nuova versione">Ri-cattura</button>
         </form>
+        <?php endif; ?>
         <form action="delete.php" method="post" onsubmit="return confirm('Eliminare definitivamente <?= h($short) ?>?')">
           <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
           <input type="hidden" name="short" value="<?= h($short) ?>">
@@ -200,11 +220,14 @@ layout_masthead('sheet');
         $short = (string)$r['short'];
         $base  = '/archives/' . rawurlencode($short);
         $st    = (string)($r['status'] ?? '');
+        $isWiki = ($r['kind'] ?? 'page') === 'wiki';
     ?>
       <tr data-text="<?= h(host_of($r['url']) . ' ' . ($r['title'] ?? '') . ' ' . $r['url']) ?>">
         <td class="nowrap">#<?= str_pad((string)$n, 3, '0', STR_PAD_LEFT) ?></td>
         <td class="mini">
-          <?php if ($st === 'ready'): ?>
+          <?php if ($st === 'ready' && $isWiki): ?>
+            <a href="<?= $base ?>/" target="_blank" rel="noopener">Wikipedia</a>
+          <?php elseif ($st === 'ready'): ?>
             <a href="<?= $base ?>/" target="_blank" rel="noopener"><img loading="lazy" src="<?= $base ?>/shot.png" alt=""></a>
           <?php else: ?>—<?php endif; ?>
         </td>
@@ -221,18 +244,25 @@ layout_masthead('sheet');
         </td>
         <td class="dl">
           <a href="<?= $base ?>/" target="_blank" rel="noopener">archivio</a><br>
+          <?php if ($isWiki): ?>
+          <a href="<?= $base ?>/bundle.zip" target="_blank" rel="noopener">zip</a>
+          <?php if (isset($wikiOf[$short])): ?><br><a href="wiki.php?page=<?= $wikiOf[$short] ?>">dossier</a><?php endif; ?>
+          <?php else: ?>
           <a href="<?= $base ?>/shot.png" target="_blank" rel="noopener">png</a> ·
           <a href="<?= $base ?>/page.pdf" target="_blank" rel="noopener">pdf</a><br>
           <a href="<?= $base ?>/text.txt" target="_blank" rel="noopener">txt</a> ·
           <a href="<?= $base ?>/bundle.zip" target="_blank" rel="noopener">zip</a>
+          <?php endif; ?>
         </td>
         <td class="nowrap">
+          <?php if (!$isWiki): ?>
           <form action="resnap.php" method="post" style="display:inline"
                 onsubmit="return confirm('Ri-catturare ora?')">
             <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
             <input type="hidden" name="short" value="<?= h($short) ?>">
             <button type="submit">Ri-cattura</button>
           </form>
+          <?php endif; ?>
           <form action="delete.php" method="post" style="display:inline"
                 onsubmit="return confirm('Eliminare <?= h($short) ?>?')">
             <input type="hidden" name="csrf" value="<?= h($csrf) ?>">

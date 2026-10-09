@@ -108,6 +108,7 @@ function snapshot_view(array $r): array
         'diff_pct'     => isset($r['diff_pct']) ? (float)$r['diff_pct'] : null,
         'parent_short' => $r['parent_short'] ?? null,
         'source'       => $r['source'] ?? null,
+        'kind'         => $r['kind'] ?? 'page',
         'capture_ms'   => isset($r['capture_ms']) ? (int)$r['capture_ms'] : null,
         'created_at'   => $r['ts'] ?? null,
         'done_at'      => $r['done_at'] ?? null,

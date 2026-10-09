@@ -4,7 +4,9 @@ Archiviatore web personale self-hosted. Dato un URL, ne conserva una copia
 completa e datata — mirror statico, pagina in un solo file, screenshot a piena
 pagina, PDF, testo, bundle ZIP — con ricerca full-text sull'intero archivio e
 un'interfaccia a *provino fotografico* (contact sheet). Un bot Telegram
-facoltativo permette di archiviare inoltrando un link dal telefono.
+facoltativo permette di archiviare inoltrando un link dal telefono. Per
+Wikipedia archivia revisioni specifiche di una voce, con il wikitesto
+verificabile contro l'impronta che Wikipedia stessa pubblica.
 
 Stack: **PHP 8.1+** e **SQLite** (FTS5) per la webapp, **bash** per il worker di
 cattura. Nessun framework, nessun database server, nessuna build. Dipende solo
@@ -85,6 +87,9 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `app/snapper-perms.sh` | verifica/ripristino di permessi e ownership |
 | `app/api.php` | API JSON per servizi: solo da loopback, token Bearer con ambiti |
 | `app/api-token.php` | crea / elenca / ruota / revoca i token dell'API (solo CLI) |
+| `app/wiki.php` | Wikipedia: dossier delle voci, cronologia filtrabile, acquisizione di revisioni |
+| `app/wikilib.php` | Wikipedia: riconoscimento degli URL, client delle API, cronologia annotata (solo include) |
+| `app/wiki-worker.php` | Wikipedia: acquisizione in background, avviata da `worker.sh` (solo CLI) |
 | `bot/snapper_bot.py` | bot Telegram dedicato (solo libreria standard Python) |
 | `bot/snapper-bot.service` | unità systemd con utente effimero e sandbox stretta |
 | `bot/bot.env.sample` | modello di `/etc/snapper/bot.env` |
@@ -103,12 +108,18 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
   `size_bytes`, `final_url`, `http_status`, `content_type`, `sha256`,
   `capture_ms`, `pinned`, `note`, `tags`, `parent_short` (catena di versioni),
   `ots_status`, `diff_pct`, `done_at` (conclusione della cattura: cursore
-  degli eventi), `source` (`web`, `watch`, `api:<nome token>`).
+  degli eventi), `source` (`web`, `watch`, `api:<nome token>`), `kind`
+  (`page` o `wiki`).
 - `snapshots_fts` — indice FTS5 (`title`, `url`, `body`).
 - `watches` — URL osservati: `url`, `title`, `every_hours`, `last_run`,
   `last_short`, `enabled`.
 - `api_tokens` — token dell'API: solo l'impronta SHA-256, `scopes`,
   `last_used`, `uses`, `revoked`.
+- `wiki_pages` — voci di Wikipedia con revisioni archiviate (`lang`, `pageid`, `title`).
+- `wiki_revisions` — revisioni archiviate: `revid`, data, autore, commento,
+  dimensione, `sha1` pubblicato da Wikipedia, `sha1_ok`, `sha256_wikitext`,
+  etichette, e la prova (`short`) che le contiene.
+- `wiki_jobs` — revisioni richieste da un'acquisizione in coda.
 
 Gli artefatti di ogni cattura stanno in `<DATA_DIR>/<short>/` e sono esposti
 pubblicamente come `/archives/<short>/` tramite un symlink.
@@ -156,6 +167,43 @@ sudo logrotate -d /etc/logrotate.d/snapper     # verifica a vuoto
 L'app presuppone di essere servita sotto `/snapper/` con gli archivi sotto
 `/archives/` sullo stesso host (rivedi i percorsi in `config.php` e i redirect
 in-app se cambi prefisso).
+
+## Wikipedia
+
+Scheda **Wikipedia**: si incolla l'indirizzo di una voce (qualsiasi lingua; anche
+link con `?oldid=` o `?diff=`) e si apre la cronologia, filtrabile per date, autore,
+variazione minima e con la possibilità di nascondere modifiche minori, bot, revert e
+modifiche annullate. Ogni riga è annotata: revert (etichette `mw-rollback`,
+`mw-undo`, `mw-manual-revert`), modifiche poi annullate (`mw-reverted`), ritorni a un
+testo identico a una revisione precedente (stesso sha1), bot, autori non registrati.
+
+Si acquisiscono le revisioni selezionate, le ultime N, un intervallo di date, tutte
+le modifiche di un autore o la versione in vigore a una data (massimo 50 per volta;
+quelle già archiviate vengono saltate). Ogni acquisizione è una prova immutabile:
+
+| File | Contenuto |
+|---|---|
+| `rev/<revid>/wikitext.txt` | il testo sorgente esatto, verificato con lo sha1 pubblicato da Wikipedia |
+| `rev/<revid>/index.html` | la revisione resa, navigabile senza rete |
+| `rev/<revid>/page.css` | stili della revisione (TemplateStyles e stili inline convertiti in classi) |
+| `rev/<revid>/meta.json`, `parse.json` | metadati; sezioni, categorie, link esterni, template |
+| `assets/` | fogli di stile di Wikipedia e immagini, scaricati una volta per prova |
+| `SHA256SUMS`, `SHA256SUMS.ots`, `bundle.zip` | manifesto, marca temporale, archivio |
+
+La verifica non dipende da Snapper: `sha1sum rev/<revid>/wikitext.txt` deve
+coincidere con lo sha1 che le API di Wikipedia restituiscono per quella revisione.
+
+**Isolamento.** Le copie non contattano nulla all'esterno: immagini e stili sono
+locali, i link verso voci già archiviate puntano alla copia locale, tutti gli altri
+sono resi inerti (l'indirizzo resta leggibile passandoci sopra). Gli stili inline
+diventano classi perché la CSP degli archivi non ammette `unsafe-inline`.
+
+**Limite dichiarato.** Wikipedia ricostruisce le revisioni vecchie con i template e
+le immagini attuali: il wikitesto è esatto, la resa grafica di una revisione vecchia
+è un'approssimazione, e la pagina lo dice.
+
+Snapper contatta solo `<lingua>.wikipedia.org` e gli host multimediali di Wikimedia,
+in serie, con il parametro `maxlag` e un User-Agent con l'URL di questo repository.
 
 ## API e bot Telegram (opzionale)
 

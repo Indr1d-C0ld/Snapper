@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-10-09 — Wikipedia: acquisizione di revisioni verificabili
+
+Prima fase di un piano più ampio (confronto fra versioni, poi siti interi).
+
+### Nuovo
+
+- `app/wiki.php` — scheda Wikipedia: dossier delle voci, cronologia filtrabile e
+  annotata (revert, modifiche annullate, ritorni a testi identici via sha1, bot, IP),
+  cinque modi di acquisire (selezione, ultime N, intervallo, autore, versione in
+  vigore a una data).
+- `app/wikilib.php` — riconoscimento degli indirizzi di Wikipedia in tutte le forme
+  comuni, client delle API con `maxlag`, host consentiti fissi (la lingua è validata
+  perché l'host costruito non possa essere altro).
+- `app/wiki-worker.php` — acquisizione in background: wikitesto verificato con lo
+  sha1 di Wikipedia, pagina resa navigabile senza rete, stili e immagini locali, link
+  esterni inerti, manifesto marcato, ZIP. Avviato da `worker.sh` per le prove di tipo
+  `wiki`, dopo gli stessi controlli anti-SSRF delle altre catture.
+- Schema: `snapshots.kind`, tabelle `wiki_pages`, `wiki_revisions`, `wiki_jobs`.
+- Provino e registro mostrano le prove Wikipedia con indice, ZIP e dossier; la
+  ri-cattura rimanda al dossier; l'eliminazione toglie le revisioni dal dossier; l'API
+  espone il tipo di prova.
+
+### Corretto
+
+- **La scheda indice delle catture normali era senza stile.** `worker.sh` la
+  generava con uno `<style>` inline, che la CSP degli archivi (`default-src 'self'`,
+  senza `unsafe-inline`) blocca. Difetto presente dal rework di settembre. Lo stile
+  ora sta in `index.css`; la politica di sicurezza resta invariata.
+- Le intestazioni delle prove mostravano il codice in maiuscolo, ma i codici
+  distinguono maiuscole e minuscole.
+
+### Trovati in collaudo, prima del rilascio
+
+- Una lettura del database lasciata aperta per tutta l'acquisizione teneva un blocco
+  su SQLite: gli altri processi ricevevano "database is locked". Ogni lettura ora
+  chiude subito il cursore.
+- `PDOException` è una `RuntimeException`: un errore del database veniva attribuito
+  a Wikipedia ("non raggiungibile"). Ora i due casi sono distinti.
+- Un'acquisizione fallita poteva lasciare revisioni nel dossier: ora le rimuove.
+
 ## 2026-10-08 — API per servizi e bot Telegram dedicato
 
 Snapper funzionava bene ma si usava poco: archiviare richiedeva computer,
