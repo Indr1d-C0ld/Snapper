@@ -25,7 +25,7 @@ if (!$row) {
     exit('snapshot inesistente');
 }
 
-if (($row['kind'] ?? 'page') === 'wiki') {
+if (in_array($row['kind'] ?? 'page', ['wiki', 'wikiexport'], true)) {
     $w = $pdo->prepare('SELECT wiki_page FROM wiki_jobs WHERE short=?');
     $w->execute([$short]);
     $wp = (int)($w->fetch()['wiki_page'] ?? 0);

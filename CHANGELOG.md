@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-10-09 — Wikipedia: banco di confronto
+
+Seconda fase: vedere ogni differenza fra due revisioni archiviate, capirne il peso e
+sapere chi l'ha fatta.
+
+### Nuovo
+
+- `app/wikidiff.php` — motore di confronto a due livelli (blocchi, poi parole o frasi)
+  con l'algoritmo di Myers a spazio lineare e un tetto di tempo; riconoscimento degli
+  spostamenti; opzioni per spazi, punteggiatura, citazioni riformattate, numeri delle
+  note. Analisi strutturale (sezioni, note e domini, infobox, template, categorie,
+  collegamenti, immagini), cronologia completa con copia locale, alternanze fra
+  versioni identiche, riepilogo per autore, linea del tempo in SVG, riallineamento dei
+  frammenti di WikiWho al wikitesto.
+- `app/wikicmp.php` — banco con le schede Testo, Affiancato, Wikitesto, Struttura,
+  Dinamiche, Attribuzione; navigazione fra le modifiche con j/k; modifiche intermedie
+  su Wikipedia con autori e commenti.
+- Esportazione del dossier: nuove prove di tipo `wikiexport`, eseguite da
+  `wiki-worker.php`, con le prove originali intatte, i confronti statici e un nuovo
+  manifesto marcato.
+- Schema: `wiki_pages.wikiwho` (consenso all'attribuzione, voce per voce).
+
+### Trovati in collaudo, prima del rilascio
+
+- In PHP 8.4 `Dom\Element` non ha `children`, e rimuovere nodi da una copia staccata
+  del documento solleva un errore: l'estrazione ora legge il documento senza
+  modificarlo.
+- Togliere la spunta di un'opzione non aveva effetto (le caselle non spuntate non
+  vengono inviate): il modulo ora porta un marcatore.
+- La prima apertura di un confronto su una voce lunga scaricava l'intera cronologia
+  (21 secondi su «Roma»): ora legge solo l'intervallo fra le due revisioni (0,6 s).
+- L'esportazione escludeva lo ZIP delle prove originali, che così non erano davvero
+  intatte: ora le copia per intero.
+
 ## 2026-10-09 — Wikipedia: acquisizione di revisioni verificabili
 
 Prima fase di un piano più ampio (confronto fra versioni, poi siti interi).

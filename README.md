@@ -89,7 +89,9 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `app/api-token.php` | crea / elenca / ruota / revoca i token dell'API (solo CLI) |
 | `app/wiki.php` | Wikipedia: dossier delle voci, cronologia filtrabile, acquisizione di revisioni |
 | `app/wikilib.php` | Wikipedia: riconoscimento degli URL, client delle API, cronologia annotata (solo include) |
-| `app/wiki-worker.php` | Wikipedia: acquisizione in background, avviata da `worker.sh` (solo CLI) |
+| `app/wiki-worker.php` | Wikipedia: acquisizione ed esportazione del dossier in background, avviate da `worker.sh` (solo CLI) |
+| `app/wikicmp.php` | Wikipedia: banco di confronto, dinamiche della voce, attribuzione |
+| `app/wikidiff.php` | Wikipedia: motore di confronto, analisi strutturale, cronologia, WikiWho (solo include) |
 | `bot/snapper_bot.py` | bot Telegram dedicato (solo libreria standard Python) |
 | `bot/snapper-bot.service` | unità systemd con utente effimero e sandbox stretta |
 | `bot/bot.env.sample` | modello di `/etc/snapper/bot.env` |
@@ -115,7 +117,8 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
   `last_short`, `enabled`.
 - `api_tokens` — token dell'API: solo l'impronta SHA-256, `scopes`,
   `last_used`, `uses`, `revoked`.
-- `wiki_pages` — voci di Wikipedia con revisioni archiviate (`lang`, `pageid`, `title`).
+- `wiki_pages` — voci di Wikipedia con revisioni archiviate (`lang`, `pageid`, `title`,
+  `wikiwho`: consenso all'attribuzione per quella voce).
 - `wiki_revisions` — revisioni archiviate: `revid`, data, autore, commento,
   dimensione, `sha1` pubblicato da Wikipedia, `sha1_ok`, `sha256_wikitext`,
   etichette, e la prova (`short`) che le contiene.
@@ -204,6 +207,39 @@ le immagini attuali: il wikitesto è esatto, la resa grafica di una revisione ve
 
 Snapper contatta solo `<lingua>.wikipedia.org` e gli host multimediali di Wikimedia,
 in serie, con il parametro `maxlag` e un User-Agent con l'URL di questo repository.
+
+### Banco di confronto
+
+Dal dossier di una voce si scelgono due revisioni archiviate, A e B. Il confronto
+legge i file delle prove, non Wikipedia.
+
+| Scheda | Contenuto |
+|---|---|
+| Testo, Affiancato | differenze parola per parola (o per frase), con i passaggi spostati riconosciuti come tali |
+| Wikitesto | il sorgente: commenti nascosti, parametri, categorie; citazioni solo riformattate ignorabili |
+| Struttura | sezioni (nuove, tolte, rinominate, spostate), note e domini delle fonti, infobox campo per campo, template con gli avvisi di manutenzione, categorie, collegamenti, immagini |
+| Dinamiche | dimensione nel tempo con i revert, alternanze fra versioni identiche (stesso sha1) con chi ripristina e chi viene annullato, autori con byte aggiunti e tolti |
+| Attribuzione | chi ha scritto ogni frammento e quando (WikiWho), colorato per anno di inserimento |
+
+Il confronto è a due livelli, come quello di MediaWiki: prima i blocchi (paragrafi,
+voci di elenco, righe di tabella; righe del wikitesto), poi le parole dentro i blocchi
+cambiati. L'algoritmo è quello di Myers a spazio lineare, con un tetto di tempo; è
+collaudato su migliaia di casi casuali contro la sottosequenza comune più lunga
+calcolata per forza bruta. Sotto ogni confronto: le modifiche intermedie su Wikipedia,
+con autore e commento.
+
+**Attribuzione.** WikiWho è un servizio di ricerca su Wikimedia Cloud: riceve lingua e
+id delle revisioni analizzate, il che rivela quale voce si sta studiando. Si attiva voce
+per voce con un clic esplicito, e l'attivazione resta nel registro di audit. I frammenti
+di WikiWho (minuscoli, senza spazi) vengono riallineati al wikitesto archiviato.
+
+**Esportazione del dossier.** Una nuova prova con le prove originali copiate intatte
+(manifesti e marche del giorno dell'acquisizione compresi), i confronti già calcolati
+fra revisioni consecutive e fra la prima e l'ultima, la linea del tempo, un nuovo
+manifesto marcato e lo ZIP. Si apre con un normale browser.
+
+Le dinamiche leggono al massimo le ultime 5.000 modifiche di una voce (copia locale di
+6 ore in `<DATA_DIR>/.wikicache`).
 
 ## API e bot Telegram (opzionale)
 

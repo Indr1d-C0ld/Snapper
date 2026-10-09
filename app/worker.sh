@@ -87,7 +87,7 @@ host_is_private "$URL_HOST" && fail "host non pubblico: $URL_HOST"
 # dal modulo normale resta una cattura di pagina come le altre.
 KIND="$(printf '{}' | "$PHP" "$DBHELP" get "$SHORT" 2>/dev/null \
   | "$PHP" -r '$j=json_decode(stream_get_contents(STDIN),true);echo $j["kind"]??"";' || true)"
-if [ "$KIND" = "wiki" ]; then
+if [ "$KIND" = "wiki" ] || [ "$KIND" = "wikiexport" ]; then
   trap - ERR EXIT
   log "START $SHORT :: Wikipedia ($URL)"
   exec "$PHP" "$APPDIR/wiki-worker.php" "$SHORT"

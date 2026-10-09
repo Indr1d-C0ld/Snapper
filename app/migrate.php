@@ -110,6 +110,15 @@ CREATE TABLE IF NOT EXISTS wiki_revisions (
   UNIQUE(wiki_page, revid, short)
 )");
 $pdo->exec("CREATE INDEX IF NOT EXISTS idx_wrev_page ON wiki_revisions(wiki_page, ts)");
+// consenso all'attribuzione con WikiWho, voce per voce (fase 2)
+$wpCols = [];
+foreach ($pdo->query('PRAGMA table_info(wiki_pages)') as $r) {
+    $wpCols[] = $r['name'];
+}
+if (!in_array('wikiwho', $wpCols, true)) {
+    $pdo->exec('ALTER TABLE wiki_pages ADD COLUMN wikiwho INTEGER DEFAULT 0');
+    echo "+ colonna wiki_pages.wikiwho\n";
+}
 $pdo->exec("CREATE INDEX IF NOT EXISTS idx_wrev_short ON wiki_revisions(short)");
 $pdo->exec("
 CREATE TABLE IF NOT EXISTS wiki_jobs (

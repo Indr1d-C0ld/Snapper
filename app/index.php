@@ -45,7 +45,7 @@ if ($q !== '') {
 
 // prove di tipo Wikipedia: niente screenshot/PDF, ma un dossier della voce
 $wikiOf = [];
-$wikiShorts = array_column(array_filter($rows, fn($r) => ($r['kind'] ?? 'page') === 'wiki'), 'short');
+$wikiShorts = array_column(array_filter($rows, fn($r) => in_array($r['kind'] ?? 'page', ['wiki', 'wikiexport'], true)), 'short');
 if ($wikiShorts) {
     $in = implode(',', array_fill(0, count($wikiShorts), '?'));
     $w = $pdo->prepare("SELECT short, wiki_page FROM wiki_jobs WHERE short IN ($in)");
@@ -137,7 +137,7 @@ layout_masthead('sheet');
       $st    = (string)($r['status'] ?? '');
       $dom   = host_of($r['url']);
       $pinned = !empty($r['pinned']);
-      $isWiki = ($r['kind'] ?? 'page') === 'wiki';
+      $isWiki = in_array($r['kind'] ?? 'page', ['wiki', 'wikiexport'], true);
       $hasShot = $st === 'ready' && !$isWiki;
   ?>
     <figure class="frame <?= $pinned ? 'pinned' : '' ?>" data-text="<?= h($dom . ' ' . ($r['title'] ?? '') . ' ' . $r['url']) ?>">
@@ -220,7 +220,7 @@ layout_masthead('sheet');
         $short = (string)$r['short'];
         $base  = '/archives/' . rawurlencode($short);
         $st    = (string)($r['status'] ?? '');
-        $isWiki = ($r['kind'] ?? 'page') === 'wiki';
+        $isWiki = in_array($r['kind'] ?? 'page', ['wiki', 'wikiexport'], true);
     ?>
       <tr data-text="<?= h(host_of($r['url']) . ' ' . ($r['title'] ?? '') . ' ' . $r['url']) ?>">
         <td class="nowrap">#<?= str_pad((string)$n, 3, '0', STR_PAD_LEFT) ?></td>

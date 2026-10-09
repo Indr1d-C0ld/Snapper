@@ -206,6 +206,9 @@ if (isset($_GET['page'])) {
       </div>
       <div class="wk-actions">
         <a class="wk-btn" href="wiki.php?<?= h(http_build_query(['lang' => $wp['lang'], 'title' => $wp['title']])) ?>">Cronologia e acquisizione</a>
+        <?php if (count($revs) > 1): ?><a class="wk-btn" href="wikicmp.php?page=<?= $wid ?>">Banco di confronto</a><?php endif; ?>
+        <a class="wk-btn ghost" href="wikicmp.php?page=<?= $wid ?>&amp;tab=dinamiche">Dinamiche</a>
+        <a class="wk-btn ghost" href="wikicmp.php?page=<?= $wid ?>&amp;tab=attribuzione">Attribuzione</a>
         <a class="wk-btn ghost" href="<?= h(wiki_article_url($wp['lang'], $wp['title'])) ?>" target="_blank" rel="noopener noreferrer">Voce su Wikipedia ↗</a>
       </div>
     </div>
@@ -224,13 +227,27 @@ if (isset($_GET['page'])) {
 
     <?php if (!$revs): ?>
       <div class="empty">Nessuna revisione ancora archiviata per questa voce.</div>
-    <?php else: ?>
+    <?php else:
+        $uniq = [];
+        foreach ($revs as $r) { $uniq[(int)$r['revid']] ??= $r; }
+        $ids = array_keys($uniq);           // dalla più recente
+        $defB = $ids[0] ?? 0;
+        $defA = $ids[1] ?? 0; ?>
+      <form method="get" action="wikicmp.php" id="cmpf">
+      <input type="hidden" name="page" value="<?= $wid ?>">
+      <div class="toolbar">
+        <span class="count">Scegli A e B nelle prime colonne e confronta</span>
+        <?php if (count($uniq) > 1): ?><button type="submit">Confronta A → B</button><?php endif; ?>
+      </div>
       <div class="tbl-scroll"><table class="ledger wk-tbl">
-        <thead><tr><th>Data (ora italiana)</th><th>Revisione</th><th>Autore</th><th>Commento</th><th class="num">Byte</th><th>sha1</th><th>Prova</th></tr></thead>
+        <thead><tr><th title="Revisione di partenza">A</th><th title="Revisione d'arrivo">B</th><th>Data (ora italiana)</th><th>Revisione</th><th>Autore</th><th>Commento</th><th class="num">Byte</th><th>sha1</th><th>Prova</th></tr></thead>
         <tbody>
         <?php foreach ($revs as $r):
-            $base = '/archives/' . rawurlencode((string)$r['short']); ?>
+            $base = '/archives/' . rawurlencode((string)$r['short']);
+            $rid = (int)$r['revid']; ?>
           <tr>
+            <td><input type="radio" name="a" value="<?= $rid ?>" <?= $rid === $defA ? 'checked' : '' ?> aria-label="A: revisione <?= $rid ?>"></td>
+            <td><input type="radio" name="b" value="<?= $rid ?>" <?= $rid === $defB ? 'checked' : '' ?> aria-label="B: revisione <?= $rid ?>"></td>
             <td class="nowrap"><?= h(ts_local($r['ts'])) ?></td>
             <td class="nowrap"><a href="<?= $base ?>/rev/<?= (int)$r['revid'] ?>/" target="_blank" rel="noopener"><?= (int)$r['revid'] ?></a>
               · <a class="u" href="<?= $base ?>/rev/<?= (int)$r['revid'] ?>/wikitext.txt" target="_blank" rel="noopener">wikitesto</a></td>
@@ -244,6 +261,16 @@ if (isset($_GET['page'])) {
         <?php endforeach; ?>
         </tbody>
       </table></div>
+      </form>
+      <form method="post" action="wikicmp.php" class="wk-export">
+        <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+        <input type="hidden" name="page" value="<?= $wid ?>">
+        <input type="hidden" name="act" value="export">
+        <button type="submit">Esporta il dossier</button>
+        <span class="hint">Una nuova prova marcata con tutte le revisioni archiviate (le prove originali incluse intatte, con i
+          loro manifesti), i confronti già calcolati fra revisioni consecutive e fra la prima e l'ultima, e la linea del tempo.
+          Si apre con un normale browser, senza Snapper.</span>
+      </form>
     <?php endif;
     echo '</div>';
     layout_foot();

@@ -31,6 +31,7 @@ ini_set('memory_limit', '1536M');
 require __DIR__ . '/config.php';
 require __DIR__ . '/lib.php';
 require __DIR__ . '/wikilib.php';
+require __DIR__ . '/wikidiff.php';
 
 const WK_IMG_MAX_BYTES   = 20_000_000;    // per immagine
 const WK_IMG_TOTAL_BYTES = 400_000_000;   // per acquisizione
@@ -380,6 +381,240 @@ function wk_rev_page(array $rv, array $ctx, ?array $prev, ?array $next, string $
 
 /* ===================================================================== */
 
+
+/* ===================================================================== */
+/* ---- Esportazione del dossier (prove di tipo 'wikiexport') ---------- */
+
+const WK_CMP_CSS = <<<'CSS'
+/* confronti statici del dossier esportato */
+.snp-card h2{font-size:1.05rem;margin:1.6rem 0 .5rem}
+.snp-tl{width:100%;height:auto;display:block;margin:.6rem 0;background:#fbf7ec;border:1px solid #c8bd9f}
+.wd-tl-line{fill:none;stroke:#7a5a12;stroke-width:1.3}
+.wd-tl-grid{stroke:#d8cdb2;stroke-width:.6}
+.wd-tl-lab{font:10px ui-monospace,Menlo,monospace;fill:#6f6857}
+.wd-tl-rv{fill:#a52a1d}
+.wd-tl-arch{stroke:#3f6b33;stroke-width:2}
+.wd-tl-range{fill:#e6dbc2}
+.wd-doc{font:14.5px/1.65 Georgia,'Times New Roman',serif;background:#fff;border:1px solid #c8bd9f;padding:.8rem 1rem}
+.wd-mono{font:12.5px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.wd-row{padding:.25rem .5rem;border-left:3px solid transparent;margin:.1rem 0}
+.wd-row.eq{color:#555}
+.wd-row.mod{border-left-color:#d79a3f}.wd-row.ins{border-left-color:#3f6b33}.wd-row.del{border-left-color:#a52a1d}
+.wd-row.mvf,.wd-row.mvt{border-left-color:#8a6d1f}
+.wd-row.wd-h{font-weight:700}
+.wd-gap{font:11.5px ui-monospace,Menlo,monospace;color:#6f6857;padding:.3rem .5rem;border-top:1px dashed #d8cdb2;border-bottom:1px dashed #d8cdb2;margin:.3rem 0}
+.wd-sec{display:block;font:10.5px ui-monospace,Menlo,monospace;color:#6f6857;text-transform:uppercase;letter-spacing:.06em}
+.wd-mv{display:block;font:10.5px ui-monospace,Menlo,monospace;color:#8a6d1f}
+ins{background:#d9efe1;color:#17543a;text-decoration:none;border-bottom:1.5px solid currentColor}
+del{background:#f6dcd8;color:#8d2219;text-decoration:line-through}
+mark.mv{background:#f3e7c9;color:#5b4106}
+.wd-slist{margin:.3rem 0 .8rem;padding-left:1.1rem;font-size:13px}
+.wd-slist li.add{color:#17543a}.wd-slist li.rem{color:#8d2219}
+.snp-card h4{margin:1rem 0 .2rem;font-size:13px}
+.snp-card h4 small{color:#6f6857;font-weight:400}
+.snp-stats{font:12px ui-monospace,Menlo,monospace;color:#6f6857}
+CSS;
+
+function wk_copy_tree(string $src, string $dst): void
+{
+    @mkdir($dst, 0755, true);
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($src, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+    foreach ($it as $f) {
+        $rel = substr($f->getPathname(), strlen($src) + 1);
+        // la prova originale si copia per intero (ZIP compreso), tranne il
+        // profilo temporaneo del browser
+        if (str_starts_with($rel, '.home')) {
+            continue;
+        }
+        if ($f->isDir()) {
+            @mkdir("$dst/$rel", 0755, true);
+        } elseif ($f->isFile()) {
+            copy($f->getPathname(), "$dst/$rel");
+        }
+    }
+}
+
+/** manifesto, marca temporale, ZIP e permalink: ciò che chiude ogni prova */
+function wk_seal(string $root, string $short): array
+{
+    $files = [];
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        $rel = substr($f->getPathname(), strlen($root) + 1);
+        if ($f->isFile() && !in_array($rel, ['index.html', 'SHA256SUMS', 'SHA256SUMS.ots', 'bundle.zip'], true)) {
+            $files[] = $rel;
+        }
+    }
+    sort($files, SORT_STRING);
+    $sums = '';
+    foreach ($files as $rel) {
+        $sums .= hash_file('sha256', "$root/$rel") . "  $rel\n";
+    }
+    file_put_contents("$root/SHA256SUMS", $sums);
+    $ots = trim((string)shell_exec('command -v ots 2>/dev/null'));
+    $status = 'none';
+    if ($ots !== '') {
+        @mkdir(DATA_DIR . '/.ots-cache', 0750, true);
+        exec('cd ' . escapeshellarg($root) . ' && ' . escapeshellarg($ots) . ' --cache ' . escapeshellarg(DATA_DIR . '/.ots-cache')
+            . ' stamp SHA256SUMS >/dev/null 2>&1', $o, $rc);
+        $status = ($rc === 0 && is_file("$root/SHA256SUMS.ots")) ? 'stamped' : 'none';
+    }
+    return [hash('sha256', $sums), $status, $files];
+}
+
+function wk_zip_link_ready(string $root, string $short, array $files, string $manifestSha, string $ots, int $t0, string $warn): void
+{
+    $zip = new ZipArchive();
+    if ($zip->open("$root/bundle.zip", ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
+        foreach (array_merge($files, ['index.html', 'SHA256SUMS'], $ots === 'stamped' ? ['SHA256SUMS.ots'] : []) as $rel) {
+            $zip->addFile("$root/$rel", $rel);
+        }
+        $zip->close();
+    }
+    $link = ARCH_DIR . '/' . $short;
+    if (is_link($link)) @unlink($link);
+    @symlink($root, $link);
+    $size = 0;
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $f) {
+        $size += $f->isFile() ? $f->getSize() : 0;
+    }
+    $proc = proc_open([PHP_BINARY, __DIR__ . '/worker-db.php', 'ready', $short], [0 => ['pipe', 'r']], $pipes);
+    if (!is_resource($proc)) {
+        throw new RuntimeException('impossibile registrare l\'esito');
+    }
+    fwrite($pipes[0], json_encode(['title' => '', 'size_bytes' => $size, 'sha256' => $manifestSha,
+        'capture_ms' => (int)(microtime(true) * 1000) - $t0, 'ots_status' => $ots,
+        'body_file' => "$root/text.txt", 'diff_pct' => '', 'warn' => $warn]));
+    fclose($pipes[0]);
+    if (proc_close($proc) !== 0) {
+        throw new RuntimeException('registrazione dell\'esito fallita');
+    }
+}
+
+function wk_export(PDO $pdo, string $short, string $root, array $job, string $lang, string $title, array $wanted, int $t0): void
+{
+    $s = $pdo->prepare("SELECT r.* FROM wiki_revisions r JOIN snapshots s ON s.short = r.short
+                        WHERE r.wiki_page = ? AND s.status = 'ready' ORDER BY r.ts, r.revid, r.id");
+    $s->execute([(int)$job['id']]);
+    $want = array_flip($wanted);
+    $revs = [];
+    foreach ($s->fetchAll() as $r) {
+        if (isset($want[(int)$r['revid']])) $revs[(int)$r['revid']] ??= $r;
+    }
+    $revs = array_values($revs);
+    if (!$revs) {
+        throw new RuntimeException('nessuna delle revisioni richieste è ancora archiviata');
+    }
+    // 1) le prove originali, intatte (manifesti e marche comprese)
+    foreach (array_unique(array_column($revs, 'short')) as $cs) {
+        $src = path_within_data(DATA_DIR . '/' . $cs);
+        if ($src === false || !is_dir($src)) {
+            throw new RuntimeException("prova $cs non trovata su disco");
+        }
+        wk_copy_tree($src, "$root/captures/$cs");
+        wlog("prova $cs inclusa");
+    }
+    $dirOf = fn(array $r) => "$root/captures/{$r['short']}/rev/" . (int)$r['revid'];
+    $relOf = fn(array $r, string $up) => "{$up}captures/{$r['short']}/rev/" . (int)$r['revid'] . '/index.html';
+
+    // 2) confronti: revisioni consecutive, e la prima con l'ultima
+    $pairs = [];
+    for ($i = 1; $i < count($revs); $i++) $pairs[] = [$revs[$i - 1], $revs[$i]];
+    if (count($revs) > 2) $pairs[] = [$revs[0], end($revs)];
+    $o = ['ws' => true, 'punct' => false, 'cites' => false, 'gran' => 'word'];
+    $cmpRows = '';
+    foreach ($pairs as [$ra, $rb]) {
+        $da = $dirOf($ra);
+        $db = $dirOf($rb);
+        $ca = wd_load_content($da);
+        $cb = wd_load_content($db);
+        $wa = (string)@file_get_contents("$da/wikitext.txt");
+        $wb = (string)@file_get_contents("$db/wikitext.txt");
+        $A = $ca ? wd_text_blocks($ca) : [];
+        $B = $cb ? wd_text_blocks($cb) : [];
+        $res = wd_blocks($A, $B, $o);
+        $WA = wd_wikitext_blocks($wa);
+        $WB = wd_wikitext_blocks($wb);
+        $wres = wd_blocks($WA, $WB, $o + ['cites' => true]);
+        $struct = wd_structure(wd_parse_json($da), wd_parse_json($db), $ca, $cb, $wa, $wb);
+        $st = $res['stats'];
+        $name = (int)$ra['revid'] . '-' . (int)$rb['revid'] . '.html';
+        $hdr = fn(string $l, array $r) => '<dt>' . $l . '</dt><dd><a href="' . e($relOf($r, '../')) . '">' . e(ts_local($r['ts'])) . '</a> · rev ' . (int)$r['revid']
+            . ' · ' . e((string)$r['user']) . ' · ' . ((int)$r['sha1_ok'] ? '<span class="snp-ok">sha1 ✓</span>' : '<span class="snp-bad">sha1 ✗</span>') . '</dd>';
+        $page = '<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<title>' . e($title) . ' · confronto ' . (int)$ra['revid'] . ' → ' . (int)$rb['revid'] . '</title>'
+            . '<link rel="stylesheet" href="../assets/snapper-wiki.css"></head><body class="snp-index"><div class="snp-card">'
+            . '<div class="snp-kicker">Snapper · dossier <span class="snp-code">' . e($short) . '</span> · confronto</div>'
+            . '<h1>' . e($title) . '</h1><dl class="snp-meta">' . $hdr('A', $ra) . $hdr('B', $rb) . '</dl>'
+            . '<p class="snp-stats">+' . $st['add'] . ' parole · −' . $st['del'] . ' parole · ' . $st['moved'] . ' spostamenti · '
+            . $st['mod'] . ' blocchi modificati · ' . $st['ins_blocks'] . ' nuovi · ' . $st['del_blocks'] . ' tolti</p>'
+            . '<p><a href="../index.html">← indice del dossier</a></p>'
+            . '<h2>Testo</h2>' . wd_render_static($res, $A, $B)
+            . '<h2>Struttura</h2>' . wd_render_structure($struct)
+            . '<h2>Wikitesto</h2>' . wd_render_static($wres, $WA, $WB, 1, true)
+            . '</div></body></html>';
+        file_put_contents("$root/confronti/$name", $page);
+        $cmpRows .= '<tr><td class="n"><a href="confronti/' . e($name) . '">' . e(ts_local($ra['ts'])) . ' → ' . e(ts_local($rb['ts'])) . '</a></td>'
+            . '<td class="n">+' . $st['add'] . ' / −' . $st['del'] . '</td><td class="n">' . $st['moved'] . '</td>'
+            . '<td class="n">' . $struct['refs']['na'] . ' → ' . $struct['refs']['nb'] . '</td>'
+            . '<td>' . e(implode(', ', array_merge(array_map(fn($x) => "+$x", $struct['sections']['add']), array_map(fn($x) => "−$x", $struct['sections']['rem'])))) . '</td></tr>';
+        wlog('confronto ' . $name . ' (+' . $st['add'] . '/−' . $st['del'] . ')');
+    }
+
+    // 3) linea del tempo (cronologia di Wikipedia, se raggiungibile)
+    $tl = '';
+    try {
+        $h = wd_history($lang, (int)$job['pageid']);
+        $arch = [];
+        foreach ($revs as $r) $arch[(int)$r['revid']] = true;
+        $tl = str_replace('class="wd-tl"', 'class="snp-tl wd-tl"', wd_timeline_svg($h['rows'], $arch));
+    } catch (Throwable $ex) {
+        wlog('cronologia non disponibile: ' . $ex->getMessage());
+    }
+
+    // 4) pagine e manifesto
+    @mkdir("$root/assets", 0755, true);
+    file_put_contents("$root/assets/snapper-wiki.css", WK_OWN_CSS . WK_CMP_CSS);
+    $last = end($revs);
+    @copy("$root/captures/{$last['short']}/text.txt", "$root/text.txt") || file_put_contents("$root/text.txt", $title);
+    $rowsHtml = '';
+    foreach (array_reverse($revs) as $r) {
+        $rowsHtml .= '<tr><td class="n">' . e(ts_local($r['ts'])) . '</td><td class="n"><a href="' . e($relOf($r, '')) . '">' . (int)$r['revid'] . '</a></td>'
+            . '<td>' . e((string)$r['user']) . '</td><td>' . e(mb_strimwidth((string)$r['comment'], 0, 140, '…')) . '</td>'
+            . '<td class="n">' . number_format((int)$r['size'], 0, ',', '.') . '</td>'
+            . '<td class="n">' . ((int)$r['sha1_ok'] ? '<span class="snp-ok">✓</span>' : '<span class="snp-bad">✗</span>') . '</td>'
+            . '<td class="n">captures/' . e($r['short']) . '</td></tr>';
+    }
+    [$sha, $ots, $files] = wk_seal($root, $short);
+    $verify = "# Questo dossier:\nsha256sum -c SHA256SUMS\n" . ($ots === 'stamped' ? "ots verify SHA256SUMS.ots\n" : '')
+        . "# Ogni prova originale inclusa conserva manifesto e marca del giorno dell'acquisizione:\n"
+        . "cd captures/<codice> && sha256sum -c SHA256SUMS && ots verify SHA256SUMS.ots\n"
+        . "# Ogni wikitesto: sha1sum captures/<codice>/rev/<revid>/wikitext.txt = sha1 pubblicato da Wikipedia\n";
+    $index = '<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<meta name="robots" content="noindex"><title>Dossier ' . e($short) . ' — ' . e($title) . ' (Wikipedia)</title>'
+        . '<link rel="stylesheet" href="assets/snapper-wiki.css"></head><body class="snp-index"><div class="snp-card">'
+        . '<div class="snp-kicker">Snapper · dossier <span class="snp-code">' . e($short) . '</span> · Wikipedia</div>'
+        . '<h1>' . e($title) . ' · ' . count($revs) . ' revisioni</h1><dl class="snp-meta">'
+        . '<dt>Voce</dt><dd>' . e(wiki_article_url($lang, $title)) . ' · pageid ' . (int)$job['pageid'] . '</dd>'
+        . '<dt>Esportato</dt><dd>' . e(ts_local(gmdate('Y-m-d H:i:s'))) . '</dd>'
+        . '<dt>Prove incluse</dt><dd>' . e(implode(', ', array_unique(array_column($revs, 'short')))) . '</dd>'
+        . '<dt>Manifesto</dt><dd>SHA256SUMS · ' . count($files) . ' file · sha256 <code>' . $sha . '</code></dd>'
+        . '<dt>Timestamp</dt><dd>OpenTimestamps: ' . $ots . '</dd></dl>'
+        . ($tl !== '' ? '<h2>Dimensione nel tempo</h2>' . $tl . '<p class="snp-stats">linea: dimensione · punti rossi: revert · tacche verdi: revisioni in questo dossier</p>' : '')
+        . '<h2>Confronti</h2><div class="snp-scroll"><table class="snp-tbl"><thead><tr><th>Da → a</th><th>Parole</th><th>Spostamenti</th><th>Note</th><th>Sezioni</th></tr></thead><tbody>'
+        . ($cmpRows ?: '<tr><td colspan="5">Una sola revisione: nessun confronto.</td></tr>') . '</tbody></table></div>'
+        . '<h2>Revisioni</h2><div class="snp-scroll"><table class="snp-tbl"><thead><tr><th>Data</th><th>Revisione</th><th>Autore</th><th>Commento</th><th>Byte</th><th>sha1</th><th>Prova</th></tr></thead><tbody>'
+        . $rowsHtml . '</tbody></table></div>'
+        . '<h2>Verifica</h2><div class="snp-verify">' . e($verify) . '</div>'
+        . '<div class="snp-chips"><a href="SHA256SUMS">SHA256SUMS</a>' . ($ots === 'stamped' ? '<a href="SHA256SUMS.ots">SHA256SUMS.ots</a>' : '')
+        . '<a href="bundle.zip">Bundle ZIP</a></div></div></body></html>';
+    file_put_contents("$root/index.html", $index);
+    wk_zip_link_ready($root, $short, $files, $sha, $ots, $t0, '');
+    wlog('DONE dossier · ' . count($revs) . ' revisioni · ' . count($pairs) . ' confronti');
+}
+
+/* ===================================================================== */
+
 $t0 = (int)(microtime(true) * 1000);
 $pdo = db();
 $s = $pdo->prepare('SELECT * FROM snapshots WHERE short=?');
@@ -389,7 +624,7 @@ $snap = $s->fetch();
 // lettura su SQLite per tutta l'acquisizione, e nessun altro processo (nemmeno
 // la registrazione dell'esito) riesce più a scrivere.
 $s->closeCursor();
-if (!$snap || ($snap['kind'] ?? '') !== 'wiki') {
+if (!$snap || !in_array($snap['kind'] ?? '', ['wiki', 'wikiexport'], true)) {
     fwrite(STDERR, "prova $short inesistente o non di tipo wiki\n");
     exit(2);
 }
@@ -404,20 +639,30 @@ if (!$job) {
 $lang  = (string)$job['lang'];
 $title = (string)$job['title'];
 $wanted = array_values(array_unique(array_map('intval', json_decode((string)$job['revids'], true) ?: [])));
-if (!$wanted || count($wanted) > WIKI_MAX_REVS || !wiki_valid_lang($lang)) {
+$isExport = $snap['kind'] === 'wikiexport';
+if (!$wanted || count($wanted) > ($isExport ? 200 : WIKI_MAX_REVS) || !wiki_valid_lang($lang)) {
     wk_finish_error('elenco di revisioni non valido');
 }
 
 $root = DATA_DIR . '/' . $short;
 umask(022);
-foreach (["$root/rev", "$root/assets/img"] as $d) {
+foreach ($isExport ? ["$root/captures", "$root/confronti", "$root/assets"] : ["$root/rev", "$root/assets/img"] as $d) {
     if (!is_dir($d) && !mkdir($d, 0755, true)) {
         wk_finish_error("impossibile creare $d");
     }
 }
 $pdo->prepare("UPDATE snapshots SET final_url=?, http_status=200, content_type='application/json (API MediaWiki)' WHERE short=?")
     ->execute([wiki_article_url($lang, $title), $short]);
-wlog("START $lang:$title · " . count($wanted) . ' revisioni');
+wlog(($isExport ? 'START dossier ' : 'START ') . "$lang:$title · " . count($wanted) . ' revisioni');
+if ($isExport) {
+    try {
+        wk_export($pdo, $short, $root, $job, $lang, $title, $wanted, $t0);
+    } catch (Throwable $ex) {
+        wk_finish_error($ex->getMessage());
+    }
+    wk_drain();
+    exit(0);
+}
 
 try {
     /* 1) metadati + wikitesto, verificati contro lo sha1 di Wikipedia */

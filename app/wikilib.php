@@ -99,7 +99,8 @@ function wiki_ts(string $iso): string
 function wiki_http_get(string $url, int $maxBytes = 40_000_000, int $timeout = 90): array
 {
     $host = strtolower((string)parse_url($url, PHP_URL_HOST));
-    $okHost = in_array($host, WIKI_MEDIA_HOSTS, true)
+    // wikiwho-api.wmcloud.org: attribuzione (fase 2), solo su richiesta esplicita per la voce
+    $okHost = in_array($host, WIKI_MEDIA_HOSTS, true) || $host === 'wikiwho-api.wmcloud.org'
         || (preg_match('/^([a-z0-9-]+)\.wikipedia\.org$/', $host, $m) && wiki_valid_lang($m[1]));
     if (!str_starts_with($url, 'https://') || !$okHost) {
         throw new RuntimeException("host non consentito: $host");
@@ -193,6 +194,7 @@ function wiki_norm_rev(array $r): array
         'parentid' => (int)($r['parentid'] ?? 0),
         'ts'       => wiki_ts((string)($r['timestamp'] ?? '')),
         'user'     => !empty($r['userhidden']) ? null : (string)($r['user'] ?? ''),
+        'userid'   => (int)($r['userid'] ?? 0),
         'anon'     => !empty($r['anon']) || (isset($r['userid']) && (int)$r['userid'] === 0),
         'size'     => (int)($r['size'] ?? 0),
         'comment'  => !empty($r['commenthidden']) ? null : (string)($r['comment'] ?? ''),
@@ -310,7 +312,7 @@ function wiki_known_revs(PDO $pdo, int $wikiPage): array
     }
     $pending = [];
     $s = $pdo->prepare("SELECT j.short, j.revids FROM wiki_jobs j JOIN snapshots s ON s.short = j.short
-                        WHERE j.wiki_page = ? AND s.status IN ('pending','running')");
+                        WHERE j.wiki_page = ? AND s.kind = 'wiki' AND s.status IN ('pending','running')");
     $s->execute([$wikiPage]);
     foreach ($s as $r) {
         foreach (json_decode((string)$r['revids'], true) ?: [] as $id) {
