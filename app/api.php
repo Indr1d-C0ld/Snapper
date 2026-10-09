@@ -18,6 +18,8 @@ require __DIR__ . '/lib.php';
  *
  *   POST ?a=capture  {url, title?}               archivia          [capture]
  *   POST ?a=watch    {url, every_hours, title?}  osserva un URL    [capture]
+ *   POST ?a=site     {url, preset?}              scarica un sito   [capture]
+ *        preset: sezione (predefinito), sito, documentazione, blog
  *   GET  ?a=status   &short=…                    stato di una prova    [read]
  *   GET  ?a=recent   &limit=…                    ultime prove          [read]
  *   GET  ?a=search   &q=…&limit=…                ricerca full-text     [read]
@@ -155,7 +157,7 @@ $source = 'api:' . $T['name'];
 /* ---- azioni ---------------------------------------------------------- */
 $a      = (string)($_GET['a'] ?? '');
 $method = (string)($_SERVER['REQUEST_METHOD'] ?? 'GET');
-$write  = ['capture', 'watch'];
+$write  = ['capture', 'watch', 'site'];
 if (in_array($a, $write, true) && $method !== 'POST') {
     api_fail('questa azione richiede POST', 405);
 }
@@ -234,6 +236,35 @@ case 'watch': {
         $resp['every_hours'] = $every;
     }
     out($resp, 201);
+}
+
+case 'site': {
+    need($scopes, 'capture');
+    require_once __DIR__ . '/crawllib.php';
+    $in  = json_body();
+    $url = trim((string)($in['url'] ?? ''));
+    [$ok, $reason, $host] = validate_public_url($url);
+    if (!$ok) {
+        audit("API site rifiutata token={$T['name']} url=" . substr($url, 0, 200) . " :: $reason");
+        api_fail("URL rifiutato: $reason", 422);
+    }
+    $presets = crawl_presets();
+    $preset = (string)($in['preset'] ?? 'sezione');
+    if (!isset($presets[$preset])) {
+        api_fail('profilo sconosciuto: usa ' . implode(', ', array_keys($presets)), 400);
+    }
+    // un sito può durare ore: pochi in coda per volta
+    $c = $pdo->prepare("SELECT count(*) n FROM snapshots WHERE kind='site' AND source=? AND status IN ('pending','running')");
+    $c->execute([$source]);
+    if ((int)$c->fetch()['n'] >= 3) {
+        api_fail('già 3 siti in coda o in download per questo token', 429);
+    }
+    $start = crawl_norm($url) ?? api_fail('URL non valido', 422);
+    [$short, $started] = site_enqueue($pdo, $start, crawl_options($presets[$preset]['o']), $source);
+    audit("API site ok token={$T['name']} short=$short host=$host preset=$preset");
+    $r = $pdo->prepare('SELECT * FROM snapshots WHERE short=?');
+    $r->execute([$short]);
+    out(['ok' => true, 'started' => $started, 'preset' => $preset] + snapshot_view($r->fetch()), 201);
 }
 
 case 'status': {
@@ -355,5 +386,5 @@ case 'health': {
 }
 
 default:
-    api_fail("azione sconosciuta: usa capture, watch, status, recent, search, events o health", 400);
+    api_fail("azione sconosciuta: usa capture, watch, site, status, recent, search, events o health", 400);
 }

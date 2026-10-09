@@ -16,6 +16,17 @@ if (!preg_match('/^[A-Za-z0-9]{5,12}$/', $short)) {
     exit('short non valido');
 }
 
+// un sito in corso si ferma prima dalla sua pagina: il crawler scrive ancora nella cartella
+$k = db()->prepare('SELECT kind, status FROM snapshots WHERE short=?');
+$k->execute([$short]);
+$kr = $k->fetch() ?: [];
+$k->closeCursor();
+if (($kr['kind'] ?? '') === 'site' && ($kr['status'] ?? '') === 'running') {
+    $_SESSION['flash'] = "Il sito $short è ancora in download: fermalo dalla pagina Siti, poi eliminalo.";
+    header('Location: /snapper/sites.php');
+    exit;
+}
+
 $root = DATA_DIR . '/' . $short;
 $arch = ARCH_DIR . '/' . $short;
 
@@ -56,6 +67,9 @@ $pdo->prepare('UPDATE watches SET last_short=NULL WHERE last_short=?')->execute(
 // voce senza più revisioni né acquisizioni in corso sparisce dall'elenco.
 $pdo->prepare('DELETE FROM wiki_revisions WHERE short=?')->execute([$short]);
 $pdo->prepare('DELETE FROM wiki_jobs WHERE short=?')->execute([$short]);
+$pdo->prepare('DELETE FROM site_pages WHERE short=?')->execute([$short]);
+$pdo->prepare('DELETE FROM site_pages_fts WHERE short=?')->execute([$short]);
+$pdo->prepare('DELETE FROM site_jobs WHERE short=?')->execute([$short]);
 $pdo->exec('DELETE FROM wiki_pages WHERE id NOT IN (SELECT wiki_page FROM wiki_revisions)
                                     AND id NOT IN (SELECT wiki_page FROM wiki_jobs)');
 $pdo->commit();

@@ -248,6 +248,7 @@ HELP = (
     "/ultimi [n] — le ultime prove\n"
     "/prova <i>codice</i> — dettaglio di una prova\n"
     "/osserva <i>url</i> [ore] — ricattura periodica (default ogni 24 h)\n"
+    "/sito <i>url</i> [profilo] — scarica un sito intero: sezione (predefinito), sito, documentazione, blog\n"
     "/stato — salute del sistema\n"
     "/aiuto — questo messaggio"
 )
@@ -328,6 +329,29 @@ def cmd_watch(chat, mid, arg):
     return r
 
 
+SITE_PRESETS = {"sezione": 60, "sito": 240, "documentazione": 240, "blog": 240}   # minuti massimi del profilo
+
+
+def cmd_site(state, chat, mid, arg):
+    parts = arg.split()
+    if not parts or not URL_RE.fullmatch(parts[0]):
+        return send(chat, "Uso: /sito <i>url</i> [profilo]\nProfili: " + ", ".join(SITE_PRESETS) +
+                    ". Per scegliere filtri e limiti, e per una stima prima di scaricare, usa la pagina Siti.", reply_to=mid)
+    preset = parts[1].lower() if len(parts) > 1 else "sezione"
+    if preset not in SITE_PRESETS:
+        return send(chat, "Profilo sconosciuto. Profili: " + ", ".join(SITE_PRESETS), reply_to=mid)
+    try:
+        r = snapper("site", data={"url": parts[0], "preset": preset})
+    except ApiError as ex:
+        return send(chat, f"✗ {e(str(ex))}", reply_to=mid)
+    msg = send(chat, f"⏳ <b>Download del sito</b> — <code>{e(r['short'])}</code>\n{e(parts[0])}\n"
+                     f"profilo «{e(preset)}», al massimo {SITE_PRESETS[preset]} minuti"
+                     + ("" if r.get("started") else " · in coda"), reply_to=mid)
+    state["pending"][r["short"]] = {"chat": chat, "mid": msg["message_id"], "t": time.time(),
+                                     "ttl": SITE_PRESETS[preset] * 60 + 1800}
+    log(f"sito {r['short']} accodato (chat {chat})")
+
+
 def cmd_status(chat, mid):
     try:
         h = snapper("health")
@@ -405,6 +429,8 @@ def handle(state, upd):
             r = cmd_watch(chat, mid, arg)
             if r and r.get("status") in ("pending", "running"):
                 state["pending"][r["short"]] = {"chat": chat, "mid": None, "t": time.time()}
+        elif cmd == "/sito":
+            cmd_site(state, chat, mid, arg)
         elif cmd == "/stato":
             cmd_status(chat, mid)
         elif cmd:
@@ -455,9 +481,9 @@ def poll_events(state):
             break
     now = time.time()
     for short, p in list(state["pending"].items()):
-        if now - p["t"] > PENDING_GIVE_UP:
+        if now - p["t"] > p.get("ttl", PENDING_GIVE_UP):
             del state["pending"][short]
-            text = (f"⌛ <code>{e(short)}</code>: nessun esito dopo {PENDING_GIVE_UP // 60} minuti.\n"
+            text = (f"⌛ <code>{e(short)}</code>: nessun esito dopo {int(p.get('ttl', PENDING_GIVE_UP)) // 60} minuti.\n"
                     f"Controlla con /prova {e(short)} o /stato.")
             if p.get("mid"):
                 edit(p["chat"], p["mid"], text)
@@ -476,6 +502,7 @@ def main():
         {"command": "ultimi", "description": "le ultime prove"},
         {"command": "prova", "description": "dettaglio di una prova"},
         {"command": "osserva", "description": "ricattura periodica di un URL"},
+        {"command": "sito", "description": "scarica un sito intero"},
         {"command": "stato", "description": "salute del sistema"},
         {"command": "aiuto", "description": "come si usa"},
     ])

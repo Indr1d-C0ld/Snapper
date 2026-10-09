@@ -20,15 +20,14 @@ $pdo = db();
 $spawned = 0;
 // Teniamo il lock per tutto il giro: spawn_worker_locked() lo presuppone e non
 // tenta di riacquisirlo (lo farebbe su un secondo descrittore, bloccandosi).
-while (true) {
-    $row = $pdo->query("SELECT short, url FROM snapshots WHERE status='pending' ORDER BY ts ASC LIMIT 1")->fetch();
-    if (!$row) break;
-
-    if (!spawn_worker_locked((string)$row['short'], (string)$row['url'])) {
-        break;   // limite di concorrenza raggiunto, o preso da qualcun altro
+// Si scorre tutta la coda: un sito in attesa della sua corsia non deve
+// bloccare le catture di pagina dietro di lui (e viceversa).
+$pending = $pdo->query("SELECT short, url FROM snapshots WHERE status='pending' ORDER BY ts ASC")->fetchAll();
+foreach ($pending as $row) {
+    if (spawn_worker_locked((string)$row['short'], (string)$row['url'])) {
+        $spawned++;
+        usleep(200000);
     }
-    $spawned++;
-    usleep(200000);
 }
 
 flock($lock, LOCK_UN);

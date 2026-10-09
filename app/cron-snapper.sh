@@ -45,8 +45,15 @@ foreach ($due as $w) {
 "$PHP" -r '
 require "'"$APPDIR"'/config.php";
 $pdo = db();
-$stale = $pdo->query("SELECT short FROM snapshots WHERE status=\"running\"
+$stale = $pdo->query("SELECT short FROM snapshots WHERE status=\"running\" AND kind <> \"site\"
   AND strftime(\"%s\",\"now\") - strftime(\"%s\",ts) > 1800")->fetchAll();
+// i siti possono durare ore: sono "morti" solo se non aggiornano più
+// l avanzamento da 20 minuti (o non l hanno mai scritto dopo 30)
+foreach ($pdo->query("SELECT short, ts FROM snapshots WHERE status=\"running\" AND kind = \"site\"")->fetchAll() as $s) {
+  $p = DATA_DIR . "/" . $s["short"] . "/.progress.json";
+  $age = is_file($p) ? time() - filemtime($p) : time() - strtotime($s["ts"] . " UTC");
+  if ($age > (is_file($p) ? 1200 : 1800)) $stale[] = $s;
+}
 foreach ($stale as $s) {
   $pdo->prepare("UPDATE snapshots SET status=\"error\", status_msg=\"worker interrotto (timeout)\", done_at=CURRENT_TIMESTAMP WHERE short=?")
       ->execute([$s["short"]]);

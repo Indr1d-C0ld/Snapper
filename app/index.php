@@ -138,7 +138,8 @@ layout_masthead('sheet');
       $dom   = host_of($r['url']);
       $pinned = !empty($r['pinned']);
       $isWiki = in_array($r['kind'] ?? 'page', ['wiki', 'wikiexport'], true);
-      $hasShot = $st === 'ready' && !$isWiki;
+      $isSite = ($r['kind'] ?? 'page') === 'site';
+      $hasShot = $st === 'ready' && !$isWiki && !$isSite;
   ?>
     <figure class="frame <?= $pinned ? 'pinned' : '' ?>" data-text="<?= h($dom . ' ' . ($r['title'] ?? '') . ' ' . $r['url']) ?>">
       <span class="no">#<?= str_pad((string)$n, 3, '0', STR_PAD_LEFT) ?></span>
@@ -158,7 +159,7 @@ layout_masthead('sheet');
         <?php if ($hasShot): ?>
           <img loading="lazy" src="<?= $base ?>/shot.png" alt="Anteprima di <?= h($dom) ?>">
         <?php else: ?>
-          <span><?= $st === 'error' ? 'velato' : ($isWiki && $st === 'ready' ? 'Wikipedia' : 'in sviluppo') ?></span>
+          <span><?= $st === 'error' ? 'velato' : ($isWiki && $st === 'ready' ? 'Wikipedia' : ($isSite && $st === 'ready' ? 'Sito intero' : 'in sviluppo')) ?></span>
         <?php endif; ?>
         <span class="st"><?= status_stamp($st) ?></span>
       </a>
@@ -180,7 +181,12 @@ layout_masthead('sheet');
       </figcaption>
 
       <div class="ops">
-        <?php if ($isWiki): ?>
+        <?php if ($isSite): ?>
+        <a href="<?= $base ?>/" target="_blank" rel="noopener">Indice</a>
+        <a href="<?= $base ?>/warc/<?= h(rawurlencode($short)) ?>.warc.gz" target="_blank" rel="noopener">WARC</a>
+        <a href="sites.php?site=<?= h(rawurlencode($short)) ?>">Dettaglio</a>
+        <span class="spring"></span>
+        <?php elseif ($isWiki): ?>
         <a href="<?= $base ?>/" target="_blank" rel="noopener">Indice</a>
         <a href="<?= $base ?>/bundle.zip" target="_blank" rel="noopener">ZIP</a>
         <?php if (isset($wikiOf[$short])): ?><a href="wiki.php?page=<?= $wikiOf[$short] ?>">Dossier</a><?php endif; ?>
@@ -221,11 +227,14 @@ layout_masthead('sheet');
         $base  = '/archives/' . rawurlencode($short);
         $st    = (string)($r['status'] ?? '');
         $isWiki = in_array($r['kind'] ?? 'page', ['wiki', 'wikiexport'], true);
+        $isSite = ($r['kind'] ?? 'page') === 'site';
     ?>
       <tr data-text="<?= h(host_of($r['url']) . ' ' . ($r['title'] ?? '') . ' ' . $r['url']) ?>">
         <td class="nowrap">#<?= str_pad((string)$n, 3, '0', STR_PAD_LEFT) ?></td>
         <td class="mini">
-          <?php if ($st === 'ready' && $isWiki): ?>
+          <?php if ($st === 'ready' && $isSite): ?>
+            <a href="<?= $base ?>/" target="_blank" rel="noopener">Sito</a>
+          <?php elseif ($st === 'ready' && $isWiki): ?>
             <a href="<?= $base ?>/" target="_blank" rel="noopener">Wikipedia</a>
           <?php elseif ($st === 'ready'): ?>
             <a href="<?= $base ?>/" target="_blank" rel="noopener"><img loading="lazy" src="<?= $base ?>/shot.png" alt=""></a>
@@ -244,7 +253,10 @@ layout_masthead('sheet');
         </td>
         <td class="dl">
           <a href="<?= $base ?>/" target="_blank" rel="noopener">archivio</a><br>
-          <?php if ($isWiki): ?>
+          <?php if ($isSite): ?>
+          <a href="<?= $base ?>/warc/<?= h(rawurlencode($short)) ?>.warc.gz" target="_blank" rel="noopener">warc</a><br>
+          <a href="sites.php?site=<?= h(rawurlencode($short)) ?>">dettaglio</a>
+          <?php elseif ($isWiki): ?>
           <a href="<?= $base ?>/bundle.zip" target="_blank" rel="noopener">zip</a>
           <?php if (isset($wikiOf[$short])): ?><br><a href="wiki.php?page=<?= $wikiOf[$short] ?>">dossier</a><?php endif; ?>
           <?php else: ?>

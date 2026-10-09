@@ -6,7 +6,8 @@ pagina, PDF, testo, bundle ZIP — con ricerca full-text sull'intero archivio e
 un'interfaccia a *provino fotografico* (contact sheet). Un bot Telegram
 facoltativo permette di archiviare inoltrando un link dal telefono. Per
 Wikipedia archivia revisioni specifiche di una voce, con il wikitesto
-verificabile contro l'impronta che Wikipedia stessa pubblica.
+verificabile contro l'impronta che Wikipedia stessa pubblica. Può scaricare anche
+siti interi, isolati dal resto del web e navigabili senza rete, con il WARC.
 
 Stack: **PHP 8.1+** e **SQLite** (FTS5) per la webapp, **bash** per il worker di
 cattura. Nessun framework, nessun database server, nessuna build. Dipende solo
@@ -92,6 +93,9 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
 | `app/wiki-worker.php` | Wikipedia: acquisizione ed esportazione del dossier in background, avviate da `worker.sh` (solo CLI) |
 | `app/wikicmp.php` | Wikipedia: banco di confronto, dinamiche della voce, attribuzione |
 | `app/wikidiff.php` | Wikipedia: motore di confronto, analisi strutturale, cronologia, WikiWho (solo include) |
+| `app/sites.php` | Siti interi: modulo con profili e filtri, stima, avanzamento, dettaglio con ricerca |
+| `app/crawllib.php` | Siti interi: barriera anti-SSRF, ambito, filtri, trappole, riscrittura, WARC (solo include) |
+| `app/crawl-worker.php` | Siti interi: stima e cattura in background (solo CLI) |
 | `bot/snapper_bot.py` | bot Telegram dedicato (solo libreria standard Python) |
 | `bot/snapper-bot.service` | unità systemd con utente effimero e sandbox stretta |
 | `bot/bot.env.sample` | modello di `/etc/snapper/bot.env` |
@@ -123,6 +127,9 @@ sono opzionali (`monolith`, `tesseract`, ImageMagick, `ots`).
   dimensione, `sha1` pubblicato da Wikipedia, `sha1_ok`, `sha256_wikitext`,
   etichette, e la prova (`short`) che le contiene.
 - `wiki_jobs` — revisioni richieste da un'acquisizione in coda.
+- `site_jobs`, `site_estimates` — opzioni delle catture di siti e risultati delle stime.
+- `site_pages` — ogni risorsa di un sito: URL, percorso locale, tipo, stato HTTP,
+  dimensione, SHA-256; `site_pages_fts` — ricerca nel testo delle pagine.
 
 Gli artefatti di ogni cattura stanno in `<DATA_DIR>/<short>/` e sono esposti
 pubblicamente come `/archives/<short>/` tramite un symlink.
@@ -240,6 +247,43 @@ manifesto marcato e lo ZIP. Si apre con un normale browser.
 
 Le dinamiche leggono al massimo le ultime 5.000 modifiche di una voce (copia locale di
 6 ore in `<DATA_DIR>/.wikicache`).
+
+## Siti interi
+
+Scheda **Siti**. Si indica l'indirizzo di partenza e si sceglie un profilo (solo
+questa sezione, sito intero prudente, documentazione, blog senza archivi e tag),
+oppure si regolano filtri e limiti:
+
+| Gruppo | Opzioni |
+|---|---|
+| Ambito | sotto il percorso, tutto l'host, host e sottodomini; directory incluse ed escluse |
+| Limiti | profondità dei collegamenti, pagine, MB, minuti |
+| Tipi | immagini, stili, caratteri, script, PDF, documenti, audio e video, archivi |
+| Indirizzi | espressioni regolari di inclusione ed esclusione, parametri da ignorare (tracciamento, sessioni) |
+| Trappole | calendari, ordinamenti, login e carrelli, percorsi ripetuti, troppe varianti della stessa pagina |
+| Esterni e cortesia | risorse esterne necessarie alla pagina sì/no (i link esterni non si seguono mai), robots.txt, pausa, banda |
+
+**Stima prima** legge solo le pagine, per qualche minuto, e riporta numero di
+pagine, dimensione stimata, directory più popolose, trappole e richieste bloccate.
+Dall'API: `POST ?a=site {url, preset}`; dal bot: `/sito <url> [profilo]`.
+
+**Barriera anti-SSRF nel crawler.** Un crawler segue link scelti da altri, quindi
+il controllo non si ferma all'indirizzo di partenza: ogni richiesta, ogni passo di
+ogni redirect, risolve il nome e viene rifiutata se anche un solo indirizzo non è
+pubblico o è l'IP pubblico del server stesso (ricavato da ServerName/ServerAlias di
+Apache); il collegamento avviene proprio all'indirizzo verificato (contro il DNS
+rebinding) e viene ricontrollato a posteriori; solo http/https su porte web. Non
+sostituisce una barriera di rete nel kernel, che resta consigliabile. Il JavaScript
+delle pagine non viene eseguito.
+
+Ogni sito diventa una prova con la copia navigabile in `site/<host>/` (collegamenti
+riscritti verso le copie locali, esterni e non scaricati resi inerti, script
+rimossi, stili inline spostati in file per la CSP degli archivi), il **WARC**
+(`warc/<codice>.warc.gz`, ogni scambio HTTP così com'è passato in rete) con
+l'indice CDXJ, l'indice delle pagine, `pagine.json`, il manifesto marcato e lo ZIP.
+
+La coda ha due corsie: un sito alla volta, senza occupare i posti delle catture
+di pagina.
 
 ## API e bot Telegram (opzionale)
 

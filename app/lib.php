@@ -9,11 +9,45 @@ declare(strict_types=1);
 
 function ip_is_public(string $ip): bool
 {
-    return filter_var(
-        $ip,
-        FILTER_VALIDATE_IP,
-        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
-    ) !== false;
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+        return false;
+    }
+    // Intervalli che il filtro di PHP lascia passare ma che non sono Internet
+    // pubblica: rete condivisa degli operatori, multicast, reti di prova, e
+    // gli schemi IPv6 che incapsulano un indirizzo IPv4 qualunque (NAT64,
+    // 6to4, Teredo), con cui si potrebbe raggiungere anche 127.0.0.1.
+    static $deny = [
+        '100.64.0.0/10', '192.0.0.0/24', '192.0.2.0/24', '198.18.0.0/15', '198.51.100.0/24',
+        '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4',
+        '64:ff9b::/96', '64:ff9b:1::/48', '2002::/16', '2001::/32', '2001:db8::/32', '100::/64', 'ff00::/8',
+    ];
+    foreach ($deny as $cidr) {
+        if (ip_in_cidr($ip, $cidr)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function ip_in_cidr(string $ip, string $cidr): bool
+{
+    [$net, $bits] = explode('/', $cidr);
+    $a = @inet_pton($ip);
+    $b = @inet_pton($net);
+    if ($a === false || $b === false || strlen($a) !== strlen($b)) {
+        return false;
+    }
+    $bits = (int)$bits;
+    $bytes = intdiv($bits, 8);
+    if (strncmp($a, $b, $bytes) !== 0) {
+        return false;
+    }
+    $rem = $bits % 8;
+    if ($rem === 0) {
+        return true;
+    }
+    $mask = (0xFF << (8 - $rem)) & 0xFF;
+    return (ord($a[$bytes]) & $mask) === (ord($b[$bytes]) & $mask);
 }
 
 /**
@@ -81,8 +115,14 @@ const WORKER_PATH = '/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbi
 function spawn_worker_locked(string $short, string $url): bool
 {
     $pdo = db();
-    $running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running'")->fetch()['c'];
-    if ($running >= MAX_CONCURRENCY) {
+    // Due corsie: i siti interi (uno alla volta, possono durare ore) non
+    // occupano i posti delle catture di pagina, che restano MAX_CONCURRENCY.
+    $k = $pdo->prepare('SELECT kind FROM snapshots WHERE short=?');
+    $k->execute([$short]);
+    $isSite = ($k->fetch()['kind'] ?? 'page') === 'site';
+    $k->closeCursor();
+    $running = (int)$pdo->query("SELECT COUNT(*) c FROM snapshots WHERE status='running' AND kind " . ($isSite ? "= 'site'" : "<> 'site'"))->fetch()['c'];
+    if ($running >= ($isSite ? 1 : MAX_CONCURRENCY)) {
         return false;
     }
     // La transizione pending->running è anche la guardia contro un doppio avvio
@@ -318,6 +358,7 @@ function layout_masthead(string $active = ''): void
         '<a class="tab' . ($active === $key ? ' tab-on' : '') . '" href="' . $href . '">' . $label . '</a>';
     $nav = $tab('sheet', '/snapper/index.php', 'Provino')
          . $tab('watch', '/snapper/watches.php', 'Watch')
+         . $tab('sites', '/snapper/sites.php', 'Siti')
          . $tab('wiki', '/snapper/wiki.php', 'Wikipedia')
          . '<a class="tab" href="/snapper/logout.php">Esci</a>';
     echo <<<HTML

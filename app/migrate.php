@@ -128,6 +128,44 @@ CREATE TABLE IF NOT EXISTS wiki_jobs (
   created    DATETIME DEFAULT CURRENT_TIMESTAMP
 )");
 
+/* Siti interi (fase 4). site_jobs: opzioni di una cattura; site_estimates:
+ * stime a vuoto; site_pages: ogni risorsa raccolta, con stato e impronta;
+ * site_pages_fts: ricerca nel testo delle pagine di ogni sito. */
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS site_jobs (
+  short    TEXT PRIMARY KEY,
+  url      TEXT NOT NULL,
+  options  TEXT NOT NULL,
+  created  DATETIME DEFAULT CURRENT_TIMESTAMP
+)");
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS site_estimates (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  url       TEXT NOT NULL,
+  options   TEXT NOT NULL,
+  status    TEXT DEFAULT 'running',
+  result    TEXT,
+  created   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  finished  DATETIME
+)");
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS site_pages (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  short   TEXT NOT NULL,
+  url     TEXT NOT NULL,
+  local   TEXT,
+  type    TEXT,
+  status  INTEGER,
+  ctype   TEXT,
+  size    INTEGER,
+  sha256  TEXT,
+  depth   INTEGER,
+  title   TEXT,
+  note    TEXT
+)");
+$pdo->exec("CREATE INDEX IF NOT EXISTS idx_spages_short ON site_pages(short, type)");
+$pdo->exec("CREATE VIRTUAL TABLE IF NOT EXISTS site_pages_fts USING fts5(short UNINDEXED, url, title, body, tokenize='porter')");
+
 $pdo->exec("
 CREATE TABLE IF NOT EXISTS watches (
   id           INTEGER PRIMARY KEY,

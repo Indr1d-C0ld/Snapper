@@ -92,6 +92,11 @@ if [ "$KIND" = "wiki" ] || [ "$KIND" = "wikiexport" ]; then
   log "START $SHORT :: Wikipedia ($URL)"
   exec "$PHP" "$APPDIR/wiki-worker.php" "$SHORT"
 fi
+if [ "$KIND" = "site" ]; then
+  trap - ERR EXIT
+  log "START $SHORT :: sito intero ($URL)"
+  exec "$PHP" "$APPDIR/crawl-worker.php" capture "$SHORT"
+fi
 
 umask 022
 mkdir -p "$ROOT/site" "$ROOT/.home/.cache" "$ROOT/.home/.config" "$ARCH" \

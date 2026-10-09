@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-10-09 — Siti interi
+
+### Nuovo
+
+- `app/crawllib.php`, `app/crawl-worker.php`, `app/sites.php` — download di siti
+  interi con profili, filtri (ambito, directory, espressioni regolari, tipi,
+  trappole, robots.txt, cortesia), stima a vuoto, avanzamento dal vivo,
+  interruzione, ricerca nel testo delle pagine; copia navigabile senza rete, WARC
+  con indice CDXJ, indice delle pagine, manifesto marcato.
+- Barriera anti-SSRF applicativa: ogni richiesta e ogni redirect verificati e
+  collegati all'indirizzo verificato; mai indirizzi locali, privati o del server.
+- API `POST ?a=site`, comando `/sito` nel bot.
+- Coda a due corsie (`spawn_worker_locked`, `drain.php`): un sito alla volta, le
+  catture di pagina non aspettano. `cron-snapper.sh` giudica un sito bloccato
+  dall'avanzamento, non dalla durata.
+- Schema: `site_jobs`, `site_estimates`, `site_pages`, `site_pages_fts`.
+
+### Sicurezza
+
+- `ip_is_public()` più severa, anche per le catture normali: escluse la rete
+  condivisa degli operatori (100.64/10), multicast, reti di prova e
+  documentazione, e gli schemi IPv6 che incapsulano un IPv4 (NAT64, 6to4, Teredo),
+  con cui si poteva raggiungere 127.0.0.1.
+
+### Trovati in collaudo, prima del rilascio
+
+- Le pagine non UTF-8 venivano salvate nella codifica d'origine ma dichiarate
+  UTF-8: ora sono convertite.
+- Le immagini a caricamento differito risultavano "mancanti" anche quando erano
+  state scaricate.
+- I collegamenti dalla scheda della prova verso il sito puntavano a un livello
+  sbagliato (percorsi relativi da un file nella radice).
+- Il parser HTML di PHP legge `<noscript>` come elementi: il contenuto si sposta,
+  non si reinterpreta.
+
 ## 2026-10-09 — Wikipedia: banco di confronto
 
 Seconda fase: vedere ogni differenza fra due revisioni archiviate, capirne il peso e
